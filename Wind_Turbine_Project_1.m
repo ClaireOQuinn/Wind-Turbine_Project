@@ -58,11 +58,11 @@ sections = height(Blade_data);
     dens_air, visc_air, sections, airfoil_type, airfoils);
 
 % Determine force generated from blades
-Force_total_blades = n_blades * trapz(radius, Fz_prime); % integration of z force/length along blade, factored by 3 blades
-Torque_total_blades = n_blades * trapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius, factored by 3 blades
+Force_total_blades = n_blades * cumtrapz(radius, Fz_prime); % integration of z force/length along blade, factored by 3 blades
+Torque_total_blades = n_blades * cumtrapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius, factored by 3 blades
 
-Coeff_thrust = 2*Force_total_blades/(dens_air*(wind_vel^2)*area_swept);
-Coeff_power = 2*Torque_total_blades*rot_velocity/(dens_air*(wind_vel^2)*area_swept);
+Coeff_thrust = 2*max(Force_total_blades)/(dens_air*(wind_vel^2)*area_swept);
+Coeff_power = 2*max(Torque_total_blades)*rot_velocity/(dens_air*(wind_vel^2)*area_swept);
 fprintf('Coefficent of Power: %.3f\n', Coeff_power);
 fprintf('Coefficent of Thrust: %.3f\n', Coeff_thrust);
 
@@ -106,7 +106,7 @@ function [FL_prime, FD_prime, Fz_prime, Ftheta_prime, Urel, AoA, CD_values, CL_v
     AoA = phi - deg2rad(pitch) - twist; % Determining AoA (twist is already in radians)
     AoA_deg = rad2deg(AoA); % Convert AoA to degrees
     
-
+    % Calculating drag and lift coefficients for each section of the blade
     CL_values = zeros(sections, 1); % Empty array to fill with drag coefficeint vlaues
     CD_values = zeros(sections, 1); % Empty array to fill with lift coefficeint vlaues
 
@@ -132,23 +132,23 @@ function [FL_prime, FD_prime, Fz_prime, Ftheta_prime, Urel, AoA, CD_values, CL_v
         % Matching airfoil tables and storing CL and CD
         elseif contains(section_airfoil, 'DU 91-W2-250')
             airfoil_table = airfoils.DU91;
-            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear', 'extrap');
-            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear', 'extrap');
+            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear');
+            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear');
             
         elseif contains(section_airfoil, 'DU 93-W-210')
             airfoil_table = airfoils.DU93;
-            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear', 'extrap');
-            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear', 'extrap');
+            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear');
+            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear');
             
         elseif contains(section_airfoil, 'DU 96-W-180')
             airfoil_table = airfoils.DU96;
-            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear', 'extrap');
-            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear', 'extrap');
+            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear');
+            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear');
             
         elseif contains(section_airfoil, 'DU 97-W-300')
             airfoil_table = airfoils.DU97;
-            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear', 'extrap');
-            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear', 'extrap');
+            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, c_AoA, 'linear');
+            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, c_AoA, 'linear');
         end
     end
     
