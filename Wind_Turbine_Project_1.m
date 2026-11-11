@@ -80,9 +80,9 @@ legend('Drag Coeffcient', 'Lift Coeffcient', 'Location','east')
  
 
 %% Functions
+% Calculates local speed ratio, lambda_r, tip speed ratio, lambda, and
+% local angular induction factor, alpha_prime
 function [alpha_prime_r, lambda_r, lambda] = calculateInductionFactors(radius, wind_vel, rot_velocity, alpha)
-    % Calculates local speed ratio, lambda_r, tip speed ratio, lambda, and
-    % local angular induction factor, alpha_prime
    
     lambda_r = (rot_velocity.*radius)/wind_vel;
     lambda = max(lambda_r);
@@ -90,6 +90,7 @@ function [alpha_prime_r, lambda_r, lambda] = calculateInductionFactors(radius, w
     alpha_prime_r = 0.5*(-1 + sqrt(1 + (4./(lambda_r.^2))*alpha*(1 - alpha)));
 end
 
+% Calculates the lift, drag, z, and theta forces per unit length of the blade
 function [FL_prime, FD_prime, Fz_prime, Ftheta_prime, Urel, AoA, CD_values, CL_values] = calculateDragLift( ...
     U, omega, r, alpha, alpha_prime, pitch, twist, chord, density, viscosity, sections, names, airfoils)
     
