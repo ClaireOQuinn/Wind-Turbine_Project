@@ -58,26 +58,57 @@ sections = height(Blade_data);
     dens_air, visc_air, sections, airfoil_type, airfoils);
 
 % Determine force generated from blades
-Force_total_blades = n_blades*cumtrapz(radius, Fz_prime); % integration of z force/length along blade, factored by 3 blades
-Torque_total_blades = n_blades*cumtrapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius, factored by 3 blades
+force_1_blade = cumtrapz(radius, Fz_prime); % integration of z force/length along blade, factored by 3 blades
+torque_1_blade = cumtrapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius, factored by 3 blades
 
-Coeff_thrust = 2*max(Force_total_blades)/(dens_air*(wind_vel^2)*area_swept);
-Coeff_power = 2*max(Torque_total_blades)*rot_velocity/(dens_air*(wind_vel^2)*area_swept);
+F = n_blades*max(force_1_blade);
+T = n_blades*max(torque_1_blade);
+
+Coeff_thrust = 2*F/(dens_air*(wind_vel^2)*area_swept);
+Coeff_power = 2*T*rot_velocity/(dens_air*(wind_vel^3)*area_swept);
+
 fprintf('Coefficent of Power: %.3f\n', Coeff_power);
 fprintf('Coefficent of Thrust: %.3f\n', Coeff_thrust);
 
-% Plots for deliverable 1
+%% Plots for deliverable 1
+% Plotting drag and lift coefficients across blade radius
 figure()
 plot(radius, CD_r, 'k-.', 'LineWidth', 1.5)
 hold on
-plot(radius, CL_r, 'k--','LineWidth', 1.5)
+plot(radius, CL_r, 'k-','LineWidth', 1.5)
 xlim([0 48])
 xticks([0 4 8 12 16 20 24 28 32 36 40 44 48])
 xlabel('Blade Radius (m)')
 ylim([0 1.6])
 ylabel('Coeffcient Value')
 legend('Drag Coeffcient', 'Lift Coeffcient', 'Location','east')
- 
+
+% plotting torque and force across blade radius 
+figure()
+subplot(2,1,1)
+plot(radius, force_1_blade/1000, 'k-','LineWidth', 1.5)
+xlim([0 48])
+xticks(0:4:48)
+xlabel('Blade Radius (m)')
+ylim([0 100])
+ylabel('Force along Blade (kN)')
+
+subplot(2,1,2)
+plot(radius, torque_1_blade/1000, 'k-','LineWidth', 1.5)
+xlim([0 48])
+xticks(0:4:48)
+xlabel('Blade Radius (m)')
+ylim([0 400])
+ylabel('Torque along Blade (kNm)')
+
+%% Optimizing blade pitch angle for max CP, with set tip speed ratio and velocity (deliverable 2)
+% Deliverable 2 specific parameters
+
+wind_vel_d2 = 10; % Set wind velocity [m/s]
+lambda_d2 = 5; % Set tip speed ratio 
+rot_velocity_d2 = (lambda_d2*wind_vel_d2/R)*pi/30; % Determining the rotational velocity based on tip speed ratio and wind velocity [rad/s]
+
+% 
 
 %% Functions
 % Calculates local speed ratio, lambda_r, tip speed ratio, lambda, and
