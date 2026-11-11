@@ -16,7 +16,7 @@ alpha = 1/3; % axial induction factor [-]
 
 % Fluid and Material Properties
 dens_air = 1.1; % [kg/m^3] air density
-visc_air = 8e-5; % [N s/m^2] dynamic viscosity of air
+visc_air = 1.8e-5; % [N s/m^2] dynamic viscosity of air
 dens_steel = 7850; % [kg/m^3] steel density
 strength_tens_steel = 450e6; % [Pa] tensile strength of steel
 strength_yield_steel = 345e6; % [Pa] yield strength of steel
@@ -58,15 +58,18 @@ sections = height(Blade_data);
     dens_air, visc_air, sections, airfoil_type, airfoils);
 
 % Determine force generated from blades
-force_1_blade = cumtrapz(radius, Fz_prime); % integration of z force/length along blade, factored by 3 blades
-torque_1_blade = cumtrapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius, factored by 3 blades
+force_1_blade = cumtrapz(radius, Fz_prime); % integration of z force/length along blade
+torque_1_blade = cumtrapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius
 
-F = n_blades*max(force_1_blade);
-T = n_blades*max(torque_1_blade);
+F = n_blades*max(force_1_blade); % multiplying force per blade by 3 blades
+T = n_blades*max(torque_1_blade);  % multiplying force per blade by 3 blades
 
-Coeff_thrust = 2*F/(dens_air*(wind_vel^2)*area_swept);
-Coeff_power = 2*T*rot_velocity/(dens_air*(wind_vel^3)*area_swept);
+% Calculating coefficient of thrust and power 
+Coeff_thrust = 2*F/(dens_air*(wind_vel^2)*area_swept); % Coefficient of Thrust
+Coeff_power = 2*T*rot_velocity/(dens_air*(wind_vel^3)*area_swept); % Coefficient of Power
 
+% Report deliverable 1 results 
+fprintf('\nDeliverable 1 Optimization Results:\n');
 fprintf('Coefficent of Power: %.3f\n', Coeff_power);
 fprintf('Coefficent of Thrust: %.3f\n', Coeff_thrust);
 
@@ -77,7 +80,7 @@ plot(radius, CD_r, 'k-.', 'LineWidth', 1.5)
 hold on
 plot(radius, CL_r, 'k-','LineWidth', 1.5)
 xlim([0 48])
-xticks([0 4 8 12 16 20 24 28 32 36 40 44 48])
+xticks(0:4:48)
 xlabel('Blade Radius (m)')
 ylim([0 1.6])
 ylabel('Coeffcient Value')
@@ -102,13 +105,63 @@ ylim([0 400])
 ylabel('Torque along Blade (kNm)')
 
 %% Optimizing blade pitch angle for max CP, with set tip speed ratio and velocity (deliverable 2)
-% Deliverable 2 specific parameters
 
+% Deliverable 2 specific parameter
 wind_vel_d2 = 10; % Set wind velocity [m/s]
 lambda_d2 = 5; % Set tip speed ratio 
-rot_velocity_d2 = (lambda_d2*wind_vel_d2/R)*pi/30; % Determining the rotational velocity based on tip speed ratio and wind velocity [rad/s]
+rot_velocity_d2 = (lambda_d2*wind_vel_d2/R); % Determining the rotational velocity based on tip speed ratio and wind velocity [rad/s]
 
-% 
+% Varying pitch angles from -10 to 15 degrees and creating empty arrays of
+% CP and CT to be analyzed
+pitch_values = linspace(-30,30,250);
+CP_values = zeros(size(pitch_values));
+CT_values = zeros(size(pitch_values));
+
+% Calculate induction factors for deliverable 2 conditions
+[alpha_prime_r_d2, ~, ~] = calculateInductionFactors(radius, wind_vel_d2, rot_velocity_d2, alpha);
+
+% Loop to cycle through pitch angles and calculate CP and CT values
+for j=1:length(pitch_values)
+    c_pitch = pitch_values(j); % pitch value that is being looped through
+
+    % Calculate drag, lift, z, and theta  forces per unit length
+    [~, ~, Fz_prime_d2, Ftheta_prime_d2, ~, ~, ~, ~] = calculateDragLift( ...
+        wind_vel_d2, rot_velocity_d2, radius, alpha, alpha_prime_r_d2, ...
+        c_pitch, twist, chord, dens_air, visc_air, sections, airfoil_type, airfoils);
+
+    % Determine force generated from blades
+    force_1_blade_d2 = cumtrapz(radius, Fz_prime_d2); % integration of z force/length along blade
+    torque_1_blade_d2 = cumtrapz(radius, (radius.*Ftheta_prime_d2)); % integration of theta force/length along blade multiplied by radius
+    F_d2 = n_blades*max(force_1_blade_d2); % multiplying force per blade by 3 blades
+    T_d2 = n_blades*max(torque_1_blade_d2); % multiplying force per blade by 3 blades
+
+    % Filling CT and CP arrays with resulting values from pitch angle sweep
+    CT_values(j) = 2*F_d2/(dens_air*(wind_vel_d2^2)*area_swept);
+    CP_values(j) = 2*T_d2*rot_velocity_d2/(dens_air*(wind_vel_d2^3)*area_swept);
+end
+
+% Determining pitch angle resulting in maximum coeffecient of power
+[max_CP, optimized_index] = max(CP_values);
+optimal_pitch = pitch_values(optimized_index);
+CT_d2 = CT_values(optimized_index);
+
+% Report deliverable 2 results
+fprintf('\nDeliverable 2 Optimization Results:\n');
+fprintf('Optimal Pitch Angle: %.2f deg\n', optimal_pitch);
+fprintf('Maximum Power Coefficient: %.4f\n', max_CP);
+fprintf('Resulting Thrust Coefficient: %.4f\n', CT_d2);
+
+% Plot results of optimization
+figure()
+plot(pitch_values, CP_values, 'k-', 'LineWidth', 1.5)
+hold on
+plot(optimal_pitch, max_CP, 'ko-','LineWidth', 1, 'MarkerFaceColor','k')
+text(optimal_pitch, max_CP, '  Optimized Pitch Angle', 'VerticalAlignment', 'middle')
+xlim([-30 30])
+ylim([0 0.3])
+xticks(-30:5:30)
+xlabel('Pitch Angle (degrees)')
+ylabel('Coefficient of Power')
 
 %% Functions
 % Calculates local speed ratio, lambda_r, tip speed ratio, lambda, and
