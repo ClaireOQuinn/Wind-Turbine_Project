@@ -33,8 +33,8 @@ airfoils.DU96 = readtable('DU96-W-180.csv');
 airfoils.DU97 = readtable('DU97-W-300.csv');
 
 % Convert mm to m and store blade data 
-radius = Blade_data.DistanceFromCenterOfRotation / 1000; % [m]
-chord  = Blade_data.ChordLength / 1000;  % [m]
+radius = Blade_data.DistanceFromCenterOfRotation/1000; % [m]
+chord  = Blade_data.ChordLength/1000; % [m]
 twist  = deg2rad(Blade_data.BladeTwist); % [rad]
 airfoil_type = Blade_data.Airfoil;
 
@@ -43,7 +43,7 @@ area_swept = pi*(R^2);
 
 %% Determining coefficient of power and coefficient of thrust (deliverable 1)
 wind_vel = 10; % [m/s]
-rot_velocity = 14 * (pi/30); % [rad/s]
+rot_velocity = 14*(pi/30); % [rad/s]
 pitch = 0; % [deg]
 
 % Calculate angular induction factors and speed ratios using function
@@ -58,8 +58,8 @@ sections = height(Blade_data);
     dens_air, visc_air, sections, airfoil_type, airfoils);
 
 % Determine force generated from blades
-Force_total_blades = n_blades * cumtrapz(radius, Fz_prime); % integration of z force/length along blade, factored by 3 blades
-Torque_total_blades = n_blades * cumtrapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius, factored by 3 blades
+Force_total_blades = n_blades*cumtrapz(radius, Fz_prime); % integration of z force/length along blade, factored by 3 blades
+Torque_total_blades = n_blades*cumtrapz(radius, (radius.*Ftheta_prime)); % integration of theta force/length along blade multiplied by radius, factored by 3 blades
 
 Coeff_thrust = 2*max(Force_total_blades)/(dens_air*(wind_vel^2)*area_swept);
 Coeff_power = 2*max(Torque_total_blades)*rot_velocity/(dens_air*(wind_vel^2)*area_swept);
@@ -81,12 +81,13 @@ legend('Drag Coeffcient', 'Lift Coeffcient', 'Location','east')
 
 %% Functions
 function [alpha_prime_r, lambda_r, lambda] = calculateInductionFactors(radius, wind_vel, rot_velocity, alpha)
-    % Calculates local speed ratio (lambda_r), tip speed ratio (lambda), and local angular induction factor (alpha_prime)
+    % Calculates local speed ratio, lambda_r, tip speed ratio, lambda, and
+    % local angular induction factor, alpha_prime
    
     lambda_r = (rot_velocity.*radius)/wind_vel;
     lambda = max(lambda_r);
     
-    alpha_prime_r = 0.5 * (-1 + sqrt(1 + (4./(lambda_r.^2))*alpha*(1 - alpha)));
+    alpha_prime_r = 0.5*(-1 + sqrt(1 + (4./(lambda_r.^2))*alpha*(1 - alpha)));
 end
 
 function [FL_prime, FD_prime, Fz_prime, Ftheta_prime, Urel, AoA, CD_values, CL_values] = calculateDragLift( ...
@@ -117,7 +118,7 @@ function [FL_prime, FD_prime, Fz_prime, Ftheta_prime, Urel, AoA, CD_values, CL_v
         section_airfoil = char(names(i));
         c_AoA = AoA_deg(i); % AoA that is being looped through
     
-        % Hard Code CD and CL for cylindrical blade sections using
+        % Determine CD and CL for cylindrical blade sections using
         % Reynold's Number 
         if contains(section_airfoil, 'circle')
             CL_values(i) = 0; % Lift is zero at Cylindrical section
