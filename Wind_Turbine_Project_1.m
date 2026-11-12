@@ -107,8 +107,8 @@ ylabel('Torque along Blade (kNm)')
 %% Optimizing blade pitch angle for max CP, with set tip speed ratio and velocity (deliverable 2)
 
 % Deliverable 2 specific parameter
-wind_vel_d2 = 10; % Set wind velocity [m/s]
-lambda_d2 = 5; % Set tip speed ratio 
+wind_vel_d2 = 7.6; % Set wind velocity [m/s]
+lambda_d2 = 6.61; % Set tip speed ratio 
 rot_velocity_d2 = (lambda_d2*wind_vel_d2/R); % Determining the rotational velocity based on tip speed ratio and wind velocity [rad/s]
 
 % Varying pitch angles from -10 to 15 degrees and creating empty arrays of
@@ -158,7 +158,7 @@ hold on
 plot(optimal_pitch, max_CP, 'ko-','LineWidth', 1, 'MarkerFaceColor','k')
 text(optimal_pitch, max_CP, '  Optimized Pitch Angle', 'VerticalAlignment', 'middle')
 xlim([-30 30])
-ylim([0 0.3])
+ylim([0 0.5])
 xticks(-30:5:30)
 xlabel('Pitch Angle (degrees)')
 ylabel('Coefficient of Power')
