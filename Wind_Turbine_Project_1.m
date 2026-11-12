@@ -104,16 +104,16 @@ xlabel('Blade Radius (m)')
 ylim([0 400])
 ylabel('Torque along Blade (kNm)')
 
-%% Optimizing blade pitch angle for max CP, with set tip speed ratio and velocity (deliverable 2)
+%% Optimizing blade pitch angle for max CP, with assigned tip speed ratio and velocity (deliverable 2)
 
 % Deliverable 2 specific parameter
-wind_vel_d2 = 7.6; % Set wind velocity [m/s]
-lambda_d2 = 6.61; % Set tip speed ratio 
+wind_vel_d2 = 7.6; % Assigned wind velocity [m/s]
+lambda_d2 = 6.61; % Assigned tip speed ratio 
 rot_velocity_d2 = (lambda_d2*wind_vel_d2/R); % Determining the rotational velocity based on tip speed ratio and wind velocity [rad/s]
 
-% Varying pitch angles from -10 to 15 degrees and creating empty arrays of
+% Varying pitch angles from -30 to 30 degrees and creating empty arrays of
 % CP and CT to be analyzed
-pitch_values = linspace(-30,30,250);
+pitch_values = linspace(-30, 30, 250);
 CP_values = zeros(size(pitch_values));
 CT_values = zeros(size(pitch_values));
 
@@ -148,8 +148,8 @@ CT_d2 = CT_values(optimized_index);
 % Report deliverable 2 results
 fprintf('\nDeliverable 2 Optimization Results:\n');
 fprintf('Optimal Pitch Angle: %.2f deg\n', optimal_pitch);
-fprintf('Maximum Power Coefficient: %.4f\n', max_CP);
-fprintf('Resulting Thrust Coefficient: %.4f\n', CT_d2);
+fprintf('Maximum Power Coefficient: %.3f\n', max_CP);
+fprintf('Resulting Thrust Coefficient: %.3f\n', CT_d2);
 
 % Plot results of optimization
 figure()
@@ -162,6 +162,19 @@ ylim([0 0.5])
 xticks(-30:5:30)
 xlabel('Pitch Angle (degrees)')
 ylabel('Coefficient of Power')
+
+%% Varying blade pitch angle and tip speed ratio for max CP for an assigned wind velocity
+
+% Varying pitch angles from -30 to 30 and varying lambda from 1 to 10,
+wind_vel_d3 = 6.9; % Assigned wind velocity [m/s]
+pitch_values_d3 = linspace(-30, 30, 250); 
+lambda_values_d3 = linspace(1, 10, 250);
+
+% Creating empty arrays of CP and CT to be analyzed
+CP_values_d3 = zeros(size(pitch_values_d3));
+CT_values_d3 = zeros(size(pitch_values_d3));
+
+
 
 %% Functions
 % Calculates local speed ratio, lambda_r, tip speed ratio, lambda, and
