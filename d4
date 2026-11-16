@@ -1,0 +1,91 @@
+
+% Define the wind speed range from rated to cut-out speed (m/s)
+wind_speeds_d4 = 11:0.5:25;
+
+% Define the range of blade pitch angles to test (degrees)
+pitch_angles_d4 = 0:0.1:360;
+
+% Set initial values for the required pitch angle and maximum power
+required_pitch_d4 = NaN;
+max_power_d4 = NaN;
+
+% Test each pitch angle, starting from the smallest
+for pitch = pitch_angles_d4
+
+    % Reset maximum power for the current pitch angle
+    maximum_power = 0;
+
+    % Check turbine power at each wind speed
+    for V = wind_speeds_d4
+
+        % Convert the constant rotor speed of 15.5 RPM to rad/s
+        omega = 15.5*pi/30;
+
+        % Calculate turbine power at the current wind speed and pitch
+        P = calculateTurbinePower(V, omega, pitch, ...
+            radius, chord, twist, alpha, dens_air, ...
+            visc_air, sections, airfoil_type, airfoils, n_blades);
+
+        % Stop testing this pitch angle if the power is invalid
+        if ~isfinite(P)
+            maximum_power = NaN;
+            break
+        end
+
+        % Update the maximum power for this pitch angle
+        maximum_power = max(maximum_power, P);
+    end
+
+    % Check whether the maximum power is within the rated limit
+    if isfinite(maximum_power) && maximum_power <= power_rated
+
+        % Save the first pitch angle that meets the power limit
+        required_pitch_d4 = pitch;
+        max_power_d4 = maximum_power;
+        break
+    end
+end
+
+% Display the results
+if isnan(required_pitch_d4)
+    fprintf('No valid pitch angle found.\n');
+else
+    fprintf('\nDeliverable 4 Results\n');
+    fprintf('Required pitch angle: %.1f degrees\n', ...
+        required_pitch_d4);
+    fprintf('Maximum power in range: %.4f MW\n', ...
+        max_power_d4 / 1e6);
+end
+
+
+%% Function to Calculate Turbine Power
+
+function P = calculateTurbinePower(V, omega, pitch, ...
+    radius, chord, twist, alpha, density, viscosity, ...
+    sections, airfoil_type, airfoils, n_blades)
+
+    % Calculate the induction factors along the blade
+    [alpha_prime_r, ~, ~] = calculateInductionFactors( ...
+        radius, V, omega, alpha);
+
+    % Calculate the tangential force per unit blade length
+    [~, ~, ~, Ftheta_prime, ~, ~, ~, ~] = ...
+        calculateDragLift(V, omega, radius, alpha, ...
+        alpha_prime_r, pitch, twist, chord, density, ...
+        viscosity, sections, airfoil_type, airfoils);
+
+    % Return NaN if any tangential force value is invalid
+    if any(~isfinite(Ftheta_prime))
+        P = NaN;
+        return
+    end
+
+    % Integrate the tangential force along the blade to find torque
+    torque_1_blade = cumtrapz(radius, radius .* Ftheta_prime);
+
+    % Calculate total rotor torque from all blades
+    torque = n_blades * max(torque_1_blade);
+
+    % Calculate power from torque and angular velocity (W)
+    P = torque * omega;
+end
