@@ -228,7 +228,7 @@ for i = 1:height(pitch_grid) % Looping through various tip speed ratios
     end
 end
 
-% Performing optimization to determine optimal pitch angle and tip speed ratio
+% Performing optimization for optimal pitch angle and tip speed ratio
 global x_steps_d3;
 
 % Converting rotor speed limits to tip speed ratio limits
@@ -238,6 +238,7 @@ lambda_limits = (omega_limits*R)/wind_vel_d3;
 % Upper and lower bounds of optimization
 lowerbounds_d3 = [-10, lambda_limits(1)];  %[minimum pitch, minimum lambda]
 upperbounds_d3 = [ 10, lambda_limits(2)]; %[maximum pitch, maximum lambda]
+upperbounds2_d3 = [ 10, 9] % realistic analysis upper bounds 
 
 % Initial guess 
 x0_d3 = [0, 8]; % [pitch, lambda]
@@ -255,16 +256,34 @@ options_d3 = optimoptions('fmincon', 'Display', 'off', 'Algorithm', ...
     area_swept),x0_d3, [], [], [], [], lowerbounds_d3, upperbounds_d3, ...
     [], options_d3);
 
+%further analysis with realistic bounds
+x_steps_d3_1 = x_steps_d3; %saving original bound optimization path 
+x_steps_d3 = x0_d3 %creating new path for realistic bounds
+[x_opt_d3_2, neg_CP_d3_2, exitflag_d3_2, output_d3_2] = fmincon(...
+    @(x) obj_neg_CP(x, wind_vel_d3, R, radius, alpha, twist, chord, ...
+    dens_air, visc_air, sections, airfoil_type, airfoils, n_blades, ...
+    area_swept),x0_d3, [], [], [], [], lowerbounds_d3, upperbounds2_d3, ...
+    [], options_d3);
+
 % Record optimal pitch angle and tip speed ratio
 optimal_pitch_d3  = x_opt_d3(1);
 optimal_lambda_d3 = x_opt_d3(2);
 
+% Record optimal pitch angle and tip speed ratio for realistic upper bounds
+optimal_pitch_d3_2  = x_opt_d3_2(1);
+optimal_lambda_d3_2 = x_opt_d3_2(2);
+
 % Maximium coefficient of power
 max_CP_d3 = -neg_CP_d3;
 
+% Maximium coefficient of power, realistic upper bounds
+max_CP_d3_2 = -neg_CP_d3_2;
+
 % Calculating resulting Coefficient of Thrust
 % resulting rotational velocity
-opt_omega_d3 = (optimal_lambda_d3*wind_vel_d3)/R; 
+opt_omega_d3 = (optimal_lambda_d3*wind_vel_d3)/R; %Set upper bounds
+
+opt_omega_d3_2 =(optimal_lambda_d3_2*wind_vel_d3)/R;%realistic upper bounds
 
 % Calculating resulting forces on the turbine using optimum values
 [opt_ap_d3, ~, ~] = calculateInductionFactors(radius, wind_vel_d3, ...
@@ -272,6 +291,15 @@ opt_omega_d3 = (optimal_lambda_d3*wind_vel_d3)/R;
 [~, ~, opt_Fz_d3, ~, ~, ~, ~, ~] = calculateDragLift( ...
     wind_vel_d3, opt_omega_d3, radius, alpha, opt_ap_d3, ...
     optimal_pitch_d3, twist, chord, dens_air, visc_air, sections, ...
+    airfoil_type, airfoils);
+
+% Calculating resulting forces on the turbine using optimum values
+%realistic upper bounds 
+[opt_ap_d3_2, ~, ~] = calculateInductionFactors(radius, wind_vel_d3, ...
+    opt_omega_d3_2, alpha);
+[~, ~, opt_Fz_d3_2, ~, ~, ~, ~, ~] = calculateDragLift( ...
+    wind_vel_d3, opt_omega_d3_2, radius, alpha, opt_ap_d3_2, ...
+    optimal_pitch_d3_2, twist, chord, dens_air, visc_air, sections, ...
     airfoil_type, airfoils);
 
 % resulting force on the turbine
@@ -289,6 +317,7 @@ fprintf('Optimal Pitch Angle: %.2f degrees\n', optimal_pitch_d3);
 fprintf('Optimal Tip Speed Ratio: %.2f\n', optimal_lambda_d3);
 fprintf('Maximum Power Coefficient: %.3f\n', max_CP_d3);
 fprintf('Resulting Thrust Coefficient: %.3f\n', opt_CT_d3);
+fprintf('Actual Maximum Power Coefficient: %.3f\n', max_CP_d3_2);
 
 % Contour plot over to visualize optimization
 figure('Color', 'w');
@@ -298,7 +327,8 @@ figure('Color', 'w');
     'LineWidth', 1.2);
 ylabel(colorbar, 'Coefficient of Power (C_P)');
 hold on;
-clabel(C_d3, h_d3, 'Color', 'k','Fontsize',8); %labeling contours
+%labeling contours
+clabel(C_d3, h_d3,'Color','k','Fontsize',8,'FontName','Times New Roman');
 
 % Plotting rotor speed constraints
 yline(lambda_limits(1), 'm--', 'LineWidth', 1.5); % minimum rotor speed
@@ -306,7 +336,7 @@ yline(lambda_limits(2), 'm-', 'LineWidth', 1.5); % maximum rotor speed
 
 % Plot optimization path, initial guess, and optimal CP
 % optimziation path
-plot(x_steps_d3(:,1), x_steps_d3(:,2), 'r-', 'MarkerFaceColor', 'r', ...
+plot(x_steps_d3_1(:,1), x_steps_d3_1(:,2), 'r-', 'MarkerFaceColor', 'r', ...
     'MarkerSize', 5, 'LineWidth', 2);
 % initial gues
 plot(x0_d3(1), x0_d3(2), 'bo', 'MarkerFaceColor', 'b');
@@ -314,14 +344,54 @@ plot(x0_d3(1), x0_d3(2), 'bo', 'MarkerFaceColor', 'b');
 plot(optimal_pitch_d3, optimal_lambda_d3, 'o', 'MarkerFaceColor', 'y', ...
     'MarkerSize', 10);
 
-xlabel('Blade Pitch Angle \beta (degrees)');
-ylabel('Tip Speed Ratio \lambda');
+xlabel('Blade Pitch Angle \beta (degrees)', 'FontName','Times New Roman');
+ylabel('Tip Speed Ratio \lambda', 'FontName','Times New Roman');
 xlim([-10 10]);
 ylim([5 15]);
 grid on;
 legend('C_P Contours', 'Min Rotor Speed (9.6 RPM)', ...
     'Max Rotor Speed (15.5 RPM)','Optimization Path', 'Initial Guess', ...
-    'Optimal Design Point', 'Location', 'NorthEast');
+    'Optimal Design Point', 'Location', 'NorthEast', ...
+    'FontName','Times New Roman');
+
+% Plotting same contour plot but with realistic bounds
+figure('Color', 'w');
+
+ % contour with 15 contours
+[C_d3, h_d3] = contour(pitch_grid, lambda_grid, CP_values_d3, 15, ...
+    'LineWidth', 1.2);
+ylabel(colorbar, 'Coefficient of Power (C_P)');
+hold on;
+%labeling contours
+clabel(C_d3, h_d3,'Color','k','Fontsize',8,'FontName','Times New Roman');
+
+% Plotting rotor speed constraints
+yline(lambda_limits(1), 'm--', 'LineWidth', 1.5); % minimum rotor speed
+yline(upperbounds2_d3(2), 'm-','LineWidth',1.5);% realistic max rotor speed
+
+% Plot optimization path, initial guess, and optimal CP
+% original optimziation path
+plot(x_steps_d3_1(:,1), x_steps_d3_1(:,2), 'r--', 'MarkerFaceColor', 'r', ...
+    'MarkerSize', 5, 'LineWidth', 2);
+% realistic optimziation path
+plot(x_steps_d3(:,1), x_steps_d3(:,2), 'r-', 'MarkerFaceColor', 'r', ...
+    'MarkerSize', 5, 'LineWidth', 2);
+% initial gues
+plot(x0_d3(1), x0_d3(2), 'bo', 'MarkerFaceColor', 'b');
+% optimal CP
+plot(optimal_pitch_d3_2, optimal_lambda_d3_2, 'o', 'MarkerFaceColor', 'y', ...
+    'MarkerSize', 10);
+
+xlabel('Blade Pitch Angle \beta (degrees)', 'FontName','Times New Roman');
+ylabel('Tip Speed Ratio \lambda', 'FontName','Times New Roman');
+xlim([-10 10]);
+ylim([5 15]);
+grid on;
+legend('C_P Contours', 'Min Rotor Speed (9.6 RPM)', ...
+    'Realistic Max Tip Speed Ratio (\lambda=9)','Original Optimization Path', ...
+    'Updated Optimization Path', 'Initial Guess', ...
+    'Optimal Design Point', 'Location', 'NorthEast', ...
+    'FontName','Times New Roman');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Deliverable 4: Determine Required Blade Pitch Angle
