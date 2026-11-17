@@ -1,7 +1,11 @@
 %% ========================================================================
 %  ME 4053 - Project 2: Wind Turbine Analysis (Clipper Liberty C96)
-%  Deliverable 5 (Standalone Test Script): Structural Analysis of Tower
-%  Includes: Part 1 (Static ODE45), Part 2 (1-DOF Vibration), Part 3 (Buckling)
+%  Deliverable 5 (Standalone Script): Structural Analysis of Tower
+%  Includes:
+%    Part 1: Static Deflection (ODE45) & Bending Stress
+%    Part 2: 1-DOF Tower Vibration (pulseFFT) & Tip Superposition
+%    Part 3: Global Column Buckling (Euler / Johnson)
+%    Part 4: High-Cycle Fatigue Life & Log-Scale S-N Plot
 %  Group 29 Operating Point: U_hub = 16.4 m/s, Omega = 15.5 RPM
 %% ========================================================================
 clc; clear; close all;
@@ -24,8 +28,8 @@ F_thrust          = 257.26e3;       % [N] total axial rotor thrust at hub
 dens_air             = 1.1;         % [kg/m^3] air density
 visc_air             = 1.8e-5;      % [N*s/m^2] dynamic viscosity of air
 dens_steel           = 7850;        % [kg/m^3] steel density
-strength_tens_steel  = 450e6;       % [Pa] ultimate tensile strength
-strength_yield_steel = 345e6;       % [Pa] yield strength
+strength_tens_steel  = 450e6;       % [Pa] ultimate tensile strength (Su)
+strength_yield_steel = 345e6;       % [Pa] yield strength (Sy)
 E_steel              = 200e9;       % [Pa] Young's modulus
 g                    = 9.81;        % [m/s^2] gravitational acceleration
 
@@ -90,9 +94,43 @@ fprintf('Avg Section (%s)     : L_e/rho = %.2f | S_cr = %.2f MPa | P_cr = %.2f M
     regime_avg, slend_avg, S_cr_avg / 1e6, P_cr_avg / 1e6, SF_buck_avg);
 fprintf('Top Section (%s)     : L_e/rho = %.2f | S_cr = %.2f MPa | P_cr = %.2f MN | SF = %.2f\n', ...
     regime_min, slend_min, S_cr_min / 1e6, P_cr_min / 1e6, SF_buck_min);
+
+%% 5. PART 4: FATIGUE LIFE ANALYSIS (BENDING ONLY)
+% ---> ENTER TEXTBOOK LOOKUP VALUES FOR Kt AND q BELOW <---
+% 1) Tower Foundation (Bottom, z = 0 m):
+%    Geometric ratios: D/d = 4420/4159 = 1.063,  r/d = 5/4159 = 0.00120
+Kt_bot = 2;   % <-- REPLACE NaN with theoretical stress concentration factor Kt (foundation)
+q_bot  = 0.67;   % <-- REPLACE NaN with notch sensitivity q (foundation)
+
+% 2) Tower-Nacelle Joint (Top, z = 77.7 m):
+%    Geometric ratios: D/d = 3036/3030 = 1.002,  r/d = 5/3030 = 0.00165
+Kt_top = 2;   % <-- REPLACE NaN with theoretical stress concentration factor Kt (nacelle)
+q_top  = 0.67;   % <-- REPLACE NaN with notch sensitivity q (nacelle)
+
+fatigue_res = analyzeTowerFatigue(z_tower, hub_height, OD_tower, I_tower, M_bend, ...
+    R, omega_d4, n_blades, F_thrust, omega_n, zeta_tower, nHarmonics, ...
+    strength_tens_steel, Kt_bot, q_bot, Kt_top, q_top);
+
+fprintf('\n--- Part 4: High-Cycle Fatigue Analysis (Bending Only) ---\n');
+fprintf('Modified Endurance Limit Se : %.2f MPa\n', fatigue_res.Se_bot / 1e6);
+fprintf('Tip Forces (F_mean / F_alt) : %.2f kN / %.2f kN (F_DC = %.2f kN)\n', ...
+    fatigue_res.F_mean / 1e3, fatigue_res.F_alt / 1e3, fatigue_res.F_DC / 1e3);
+fprintf('Bottom Foundation (z = 0 m) :\n');
+fprintf('  Nominal Stress (Mean/Bend): %.2f MPa / %.3f MPa\n', ...
+    fatigue_res.sig_mean_bot / 1e6, fatigue_res.sig_bend_bot / 1e6);
+fprintf('  Kf = %.3f | sig_alt = %.3f MPa | SF (Se/sig_alt) = %.2f\n', ...
+    fatigue_res.Kf_bot, fatigue_res.sig_alt_bot / 1e6, fatigue_res.SF_bot);
+fprintf('Top Tower-Nacelle (z = 77.7 m):\n');
+fprintf('  Nominal Stress (Mean/Bend): %.2f MPa / %.3f MPa\n', ...
+    fatigue_res.sig_mean_top / 1e6, fatigue_res.sig_bend_top / 1e6);
+fprintf('  Kf = %.3f | sig_alt = %.3f MPa | SF (Se/sig_alt) = %.2f\n', ...
+    fatigue_res.Kf_top, fatigue_res.sig_alt_top / 1e6, fatigue_res.SF_top);
+if isnan(Kt_bot) || isnan(q_bot) || isnan(Kt_top) || isnan(q_top)
+    fprintf('  [NOTE]: Enter textbook Kt and q values in Section 5 to populate Kf, sig_alt, and SF.\n');
+end
 fprintf('===================================================================\n');
 
-%% 5. REPORT PLOTS (Q5)
+%% 6. REPORT PLOTS (Q5)
 % Plot 1: Static Deflection Plot (Q5)
 z_full = [z_tower; hub_height];
 w_full = [w_static; w_hub_static];
@@ -123,6 +161,29 @@ plot(t_vib, x_dyn * 1000, 'b-', 'LineWidth', 1.6)
 xlabel('Time t (s)')
 ylabel('Dynamic Tip Deflection x_{dyn} (mm)')
 title('1-DOF Tower Dynamic Deflection Under Blade Shadow Effect')
+grid on
+
+% Plot 4: S-N Plot in Log Scale (Q5 - Required by Rubric)
+figure('Name', 'Q5: S-N Plot in Log Scale', 'Color', 'w')
+loglog(fatigue_res.N_curve, fatigue_res.Sf_curve / 1e6, 'k-', 'LineWidth', 2.0)
+hold on
+legend_entries = {'S-N Fatigue Curve (ASTM A572 Gr. 50)'};
+
+if isfinite(fatigue_res.sig_alt_bot)
+    yline(fatigue_res.sig_alt_bot / 1e6, 'r--', 'LineWidth', 1.5)
+    legend_entries{end+1} = sprintf('Foundation \\sigma_{alt} (%.2f MPa)', fatigue_res.sig_alt_bot / 1e6);
+end
+if isfinite(fatigue_res.sig_alt_top)
+    yline(fatigue_res.sig_alt_top / 1e6, 'b-.', 'LineWidth', 1.5)
+    legend_entries{end+1} = sprintf('Nacelle Joint \\sigma_{alt} (%.2f MPa)', fatigue_res.sig_alt_top / 1e6);
+end
+
+xlim([1e3, 1e8])
+ylim([0.1, 1000])
+xlabel('Number of Cycles to Failure, N (cycles)')
+ylabel('Fatigue Strength S_f / Alternating Stress \sigma_{alt} (MPa)')
+title('Log-Scale S-N Diagram for Wind Turbine Tower')
+legend(legend_entries, 'Location', 'southwest')
 grid on
 
 %% ========================================================================
@@ -327,4 +388,117 @@ function [L_e, Sr_crit, slend_avg, regime_avg, S_cr_avg, P_cr_avg, SF_buck_avg, 
     end
     P_cr_min    = S_cr_min * A_min;
     SF_buck_min = P_cr_min / P_max;
+end
+
+function res = analyzeTowerFatigue(z, hub_height, OD, I, M_bend, ...
+    R, omega_rotor, n_blades, F_thrust, omega_n, zeta, nHarmonics, ...
+    Su, Kt_bot, q_bot, Kt_top, q_top)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: analyzeTowerFatigue
+%
+% PURPOSE:
+% Performs bending-only high-cycle fatigue analysis at the tower foundation
+% (bottom) and tower-nacelle joint (top) using Norton correction factors,
+% pulseFFT harmonic transmissibility (TR), stress concentration (Kf), and
+% generates the log-scale S-N curve.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    L_tower  = z(end);
+    z_offset = hub_height - L_tower;    % [m] 2.7 m rigid nacelle offset
+    D_avg    = mean(OD);
+
+    % 1. Endurance Limit Correction Factors (Bending Only)
+    C_load    = 1.0;                    % pure bending (axial & shear neglected)
+    C_surface = 0.8;                    % machined surface
+    C_temp    = 1.0;                    % ambient temperature
+    C_reliab  = 0.897;                  % 90% reliability
+    Se_prime  = 0.5 * Su;               % [Pa] uncorrected endurance limit
+
+    % Piecewise C_size based on outer diameter d [mm]
+    d_bot_mm = OD(1) * 1000;
+    d_top_mm = OD(end) * 1000;
+    C_size_bot = calcSizeFactor(d_bot_mm);
+    C_size_top = calcSizeFactor(d_top_mm);
+
+    res.Se_bot = C_load * C_size_bot * C_surface * C_temp * C_reliab * Se_prime;
+    res.Se_top = C_load * C_size_top * C_surface * C_temp * C_reliab * Se_prime;
+
+    % 2. Dynamic Tip Forces from pulseFFT & Transmissibility Ratio (TR)
+    f_1P        = omega_rotor / (2 * pi);
+    freq_3P     = n_blades * f_1P;
+    T_3P        = 1 / freq_3P;
+    r_eff       = R / 2;
+    pulseWidth  = (D_avg / r_eff) / omega_rotor;
+    pulseHeight = -F_thrust / n_blades;
+
+    [fourierMag, fourierPhase] = pulseFFT(freq_3P, pulseWidth, pulseHeight, nHarmonics);
+
+    res.F_DC   = fourierMag(1);
+    res.F_mean = F_thrust + res.F_DC;
+
+    % Reconstruct dynamic tip force F_dyn(t) = F_DC + sum((F_i * TR_i)*cos(...))
+    t     = linspace(0, 4 * T_3P, 2000)';
+    F_dyn = res.F_DC * ones(size(t));
+    for idx = 2:nHarmonics
+        harm_order = idx - 1;
+        w_i        = 2 * pi * harm_order * freq_3P;
+        r_i        = w_i / omega_n;
+        TR_i       = 1 / sqrt((1 - r_i^2)^2 + (2 * zeta * r_i)^2);
+        psi_i      = atan2(2 * zeta * r_i, 1 - r_i^2);
+
+        F_dyn = F_dyn + (fourierMag(idx) * TR_i) * cos(w_i * t + fourierPhase(idx) - psi_i);
+    end
+
+    res.F_alt = (max(F_dyn) - min(F_dyn)) / 2;
+    F_max     = res.F_mean + res.F_alt;
+    F_min     = res.F_mean - res.F_alt;
+
+    % 3. Bending Moments & Nominal Stresses at Bottom (z = 0) and Top (z = 77.7 m)
+    % Retain distributed tower wind-drag moment at the base from Part 1
+    M_wind_base = M_bend(1) - F_thrust * hub_height;
+
+    M_max_bot = F_max * hub_height + M_wind_base;
+    M_min_bot = F_min * hub_height + M_wind_base;
+    sig_max_bot = (M_max_bot * (OD(1) / 2)) / I(1);
+    sig_min_bot = (M_min_bot * (OD(1) / 2)) / I(1);
+    res.sig_mean_bot = (sig_max_bot + sig_min_bot) / 2;
+    res.sig_bend_bot = (sig_max_bot - sig_min_bot) / 2;
+
+    M_max_top = F_max * z_offset;
+    M_min_top = F_min * z_offset;
+    sig_max_top = (M_max_top * (OD(end) / 2)) / I(end);
+    sig_min_top = (M_min_top * (OD(end) / 2)) / I(end);
+    res.sig_mean_top = (sig_max_top + sig_min_top) / 2;
+    res.sig_bend_top = (sig_max_top - sig_min_top) / 2;
+
+    % 4. Fatigue Stress Concentration Factor Kf & Safety Factor SF
+    res.Kf_bot      = 1 + q_bot * (Kt_bot - 1);
+    res.sig_alt_bot = res.Kf_bot * res.sig_bend_bot;
+    res.SF_bot      = res.Se_bot / res.sig_alt_bot;
+
+    res.Kf_top      = 1 + q_top * (Kt_top - 1);
+    res.sig_alt_top = res.Kf_top * res.sig_bend_top;
+    res.SF_top      = res.Se_top / res.sig_alt_top;
+
+    % 5. Log-Scale S-N Curve (10^3 <= N <= 10^6, plus endurance plateau to 10^8)
+    N_finite   = logspace(3, 6, 200);
+    log10_Sf   = (1/3) * log10(res.Se_bot / (0.9 * Su)) .* log10(N_finite) ...
+                 + log10(((0.9 * Su)^2) / res.Se_bot);
+    Sf_finite  = 10.^log10_Sf;
+
+    N_plateau  = logspace(6, 8, 50);
+    Sf_plateau = res.Se_bot * ones(size(N_plateau));
+
+    res.N_curve  = [N_finite, N_plateau(2:end)];
+    res.Sf_curve = [Sf_finite, Sf_plateau(2:end)];
+end
+
+function C_size = calcSizeFactor(d_mm)
+% Piecewise size factor C_size from diameter d in mm
+    if d_mm <= 8
+        C_size = 1.0;
+    elseif d_mm <= 250
+        C_size = 1.189 * (d_mm ^ -0.097);
+    else
+        C_size = 0.6;
+    end
 end
