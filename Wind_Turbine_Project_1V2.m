@@ -318,6 +318,8 @@ fprintf('Optimal Tip Speed Ratio: %.2f\n', optimal_lambda_d3);
 fprintf('Maximum Power Coefficient: %.3f\n', max_CP_d3);
 fprintf('Resulting Thrust Coefficient: %.3f\n', opt_CT_d3);
 fprintf('Actual Maximum Power Coefficient: %.3f\n', max_CP_d3_2);
+fprintf('Actual Optimal Pitch Angle: %.2f degrees\n', optimal_pitch_d3_2);
+fprintf('Actual Optimal Tip Speed Ratio: %.2f\n', optimal_lambda_d3_2);
 
 % Contour plot over to visualize optimization
 figure('Color', 'w');
