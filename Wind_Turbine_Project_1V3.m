@@ -1,0 +1,1163 @@
+%% Wind Turbine Project
+clc
+clear   
+close all
+
+%% Import all Data and Variables
+% Turbine Operational Values
+power_rated = 2.5e6; % [W] rated turbine power
+R = 48; % [m] blade radius
+hub_height = 80.4; % [m] hub height
+speed_cut_in = 4; % [m/s] cut in wind speed
+speed_rated = 11; % [m/s] rated wind speed
+speed_cut_out = 25; % [m/s] cut out wind speed
+rotor_speed_range = [9.6, 15.5]; % [RPM] min and max rotor speed
+n_blades = 3; % number of blades
+alpha = 1/3; % axial induction factor
+
+% Component Masses
+m_rotor = 55.7e3; % [kg] rotor mass
+m_nacelle = 94.3e3; % [kg] nacelle mass
+m_blade = 10.7e3; % [kg] blade mass
+m_top = m_rotor + m_nacelle + n_blades*m_blade; % [kg] total mass at the top
+
+% Fluid and Material Properties
+dens_air = 1.1; % [kg/m^3] air density
+visc_air = 1.8e-5; % [N s/m^2] dynamic viscosity of air
+dens_steel = 7850; % [kg/m^3] steel density
+strength_tens_steel = 450e6; % [Pa] tensile strength of steel
+strength_yield_steel = 345e6; % [Pa] yield strength of steel
+
+% Import Turbine Data
+Blade_data = readtable('BladeProfile.csv');
+tower_data = readtable('towerSpecs.csv');
+
+% Airfoil Data stored in structure 
+airfoils = struct();
+airfoils.DU91 = readtable('DU91-W2-250.csv');
+airfoils.DU93 = readtable('DU93-W-210.csv');
+airfoils.DU96 = readtable('DU96-W-180.csv');
+airfoils.DU97 = readtable('DU97-W-300.csv');
+
+% Convert mm to m and store blade data 
+radius = Blade_data.DistanceFromCenterOfRotation/1000; % [m]
+chord  = Blade_data.ChordLength/1000; % [m]
+twist  = deg2rad(Blade_data.BladeTwist); % [rad]
+airfoil_type = Blade_data.Airfoil;
+
+% Calculate swept area of turbine blades
+area_swept = pi*(R^2);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Determining coefficients of power and thrust (deliverable 1)
+wind_vel = 10; % [m/s]
+rot_velocity = 14*(pi/30); % [rad/s]
+pitch = 0; % [deg]
+
+% Calculate angular induction factors and speed ratios using function
+% Define number of sections in the blade's data
+sections = height(Blade_data);
+
+% Calculate drag, lift, z, and theta  forces per unit length
+% Determine force generated from blades
+% integration of z force/length along blade
+% integration of theta force/length along blade multiplied by radius
+% Calculating coefficient of thrust and power 
+[F, T, ~, Coeff_power, Coeff_thrust, force_1_blade, torque_1_blade, CD_r, CL_r] = ...
+    computeRotorPerformance(wind_vel, rot_velocity, pitch, radius, chord, ...
+    twist, alpha, dens_air, visc_air, sections, airfoil_type, airfoils, ...
+    n_blades, area_swept);
+
+% Report deliverable 1 results 
+fprintf('\nDeliverable 1 Results:\n');
+fprintf('Coefficent of Power: %.3f\n', Coeff_power);
+fprintf('Coefficent of Thrust: %.3f\n', Coeff_thrust);
+
+%% Plots for deliverable 1
+% Plotting drag and lift coefficients across blade radius
+% figure()
+% plot(radius, CD_r, 'k-.', 'LineWidth', 1.5)
+% hold on
+% plot(radius, CL_r, 'k-','LineWidth', 1.5)
+% xlim([0 48])
+% xticks(0:4:48)
+% xlabel('Blade Radius (m)')
+% ylim([0 1.6])
+% ylabel('Coeffcient Value')
+% legend('Drag Coeffcient', 'Lift Coeffcient', 'Location','east')
+
+% % plotting torque and force across blade radius 
+% figure()
+% subplot(2,1,1)
+% plot(radius, force_1_blade/1000, 'k-','LineWidth', 1.5)
+% xlim([0 48])
+% xticks(0:4:48)
+% xlabel('Blade Radius (m)')
+% ylim([0 100])
+% ylabel('Force along Blade (kN)')
+
+% subplot(2,1,2)
+% plot(radius, torque_1_blade/1000, 'k-','LineWidth', 1.5)
+% xlim([0 48])
+% xticks(0:4:48)
+% xlabel('Blade Radius (m)')
+% ylim([0 400])
+% ylabel('Torque along Blade (kNm)')
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Optimizing blade pitch angle for max CP, with assigned tip speed ratio 
+%% and velocity (deliverable 2)
+
+% Deliverable 2 specific parameter
+wind_vel_d2 = 7.6; % Assigned wind velocity [m/s]
+lambda_d2 = 6.61; % Assigned tip speed ratio 
+
+% Determining the rotational velocity based on tip speed ratio and wind 
+% velocity [rad/s]
+rot_velocity_d2 = (lambda_d2*wind_vel_d2/R); 
+
+% Varying pitch angles from -30 to 30 degrees and creating empty arrays of
+% CP and CT to be analyzed
+pitch_values = linspace(-30, 30, 250);
+CP_values = zeros(size(pitch_values));
+CT_values = zeros(size(pitch_values));
+
+% Calculate induction factors for deliverable 2 conditions
+[alpha_prime_r_d2, ~, ~] = calculateInductionFactors(radius, ...
+    wind_vel_d2, rot_velocity_d2, alpha);
+
+% Loop to cycle through pitch angles and calculate CP and CT values
+for i=1:length(pitch_values)
+    % Calculate drag, lift, z, and theta  forces per unit length
+    % Determine force generated from blades
+    % multiplying force and torque per blade by 3 blades
+    % Filling CT and CP arrays with resulting values from pitch angle sweep
+    [~, ~, ~, CP_values(i), CT_values(i)] = computeRotorPerformance( ...
+        wind_vel_d2, rot_velocity_d2, pitch_values(i), radius, chord, ...
+        twist, alpha, dens_air, visc_air, sections, airfoil_type, ...
+        airfoils, n_blades, area_swept, alpha_prime_r_d2);
+end
+
+% Determining pitch angle resulting in maximum coeffecient of power
+[max_CP, optimized_index] = max(CP_values);
+optimal_pitch = pitch_values(optimized_index);
+CT_d2 = CT_values(optimized_index);
+
+% Report deliverable 2 results
+fprintf(['\nDeliverable 2 Optimization Results (Wind Velocity = ' ...
+    '7.6 m/s, Tip Speed Ratio = 6.6):\n']);
+fprintf('Optimal Pitch Angle: %.2f degrees\n', optimal_pitch);
+fprintf('Maximum Power Coefficient: %.3f\n', max_CP);
+fprintf('Resulting Thrust Coefficient: %.3f\n', CT_d2);
+
+% Plot results of optimization
+figure()
+plot(pitch_values, CP_values, 'k-', 'LineWidth', 1.5)
+hold on
+plot(optimal_pitch, max_CP, 'ko-','LineWidth', 1, 'MarkerFaceColor','k')
+text(optimal_pitch, max_CP, '  Optimized Pitch Angle', ...
+    'VerticalAlignment', 'middle')
+xlim([-30 30])
+ylim([0 0.5])
+xticks(-30:5:30)
+xlabel('Pitch Angle \beta (degrees)')
+ylabel('Coefficient of Power (C_P)')
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Varying blade pitch angle and tip speed ratio for max CP for an 
+%% assigned wind velocity (deliverable 3)
+
+% Varying pitch angle and tip speed ratio variables
+wind_vel_d3 = 6.9; % Assigned wind velocity [m/s]
+pitch_values_d3 = linspace(-10, 10, 100); % Varying pitch from -10 to 10
+lambda_values_d3 = linspace(5, 15, 100); % Varying lambda from 5 to 15
+
+% Generating grid for contour plot
+[pitch_grid, lambda_grid] = meshgrid(pitch_values_d3, lambda_values_d3);
+
+% Creating empty arrays of CP and CT to be analyzed
+CP_values_d3 = zeros(size(pitch_grid));
+CT_values_d3 = zeros(size(pitch_grid));
+
+% Calculating CP for each pitch angle and tip speed for contour plot
+for i = 1:height(pitch_grid) % Looping through various tip speed ratios
+    %calculating rotational velocity from tip speed ratio
+    omega_d3 = (lambda_grid(i, 1)*wind_vel_d3)/R; 
+
+    % Calculating induction factors for various tip speed ratios
+    [alpha_prime_r_d3, ~, ~] = calculateInductionFactors(radius, ...
+        wind_vel_d3, omega_d3, alpha);
+
+    for j = 1:width(pitch_grid) % Looping through various pitch angles
+        % Calculate drag, lift, z, and theta  forces per unit length
+        % Determine force generated from blades
+        % integration of z force/length along blade
+        % integration of the force/length along blade multiplied by radius
+        % Filling CT and CP arrays with resulting values 
+        [~, ~, ~, CP_values_d3(i,j), CT_values_d3(i,j)] = ...
+            computeRotorPerformance(wind_vel_d3, omega_d3, ...
+            pitch_grid(i, j), radius, chord, twist, alpha, dens_air, ...
+            visc_air, sections, airfoil_type, airfoils, n_blades, ...
+            area_swept, alpha_prime_r_d3);
+    end
+end
+
+% Performing optimization to determine optimal pitch angle and tip speed ratio
+global x_steps_d3;
+
+% Converting rotor speed limits to tip speed ratio limits
+omega_limits = rotor_speed_range*(pi/30); % [rad/s]
+lambda_limits = (omega_limits*R)/wind_vel_d3;
+
+% Upper and lower bounds of optimization
+lowerbounds_d3 = [-10, lambda_limits(1)];  %[minimum pitch, minimum lambda]
+upperbounds_d3 = [ 10, lambda_limits(2)]; %[maximum pitch, maximum lambda]
+
+% Initial guess 
+x0_d3 = [0, 8]; % [pitch, lambda]
+x_steps_d3 = x0_d3; % Record step iteration history
+
+options_d3 = optimoptions('fmincon', 'Display', 'off', 'Algorithm', ...
+    'sqp','OutputFcn', @outfun_d3, 'DiffMinChange', 1e-3);
+
+% Minimizing -CP to maximize CP as we are using 'fmincon' (a minimization
+% optimization function). Nagtive CP flips the CP values, so the min is now
+% the max
+[x_opt_d3, neg_CP_d3, exitflag_d3, output_d3] = fmincon(...
+    @(x) obj_neg_CP(x, wind_vel_d3, R, radius, alpha, twist, chord, ...
+    dens_air, visc_air, sections, airfoil_type, airfoils, n_blades, ...
+    area_swept),x0_d3, [], [], [], [], lowerbounds_d3, upperbounds_d3, ...
+    [], options_d3);
+
+% Record optimal pitch angle and tip speed ratio
+optimal_pitch_d3  = x_opt_d3(1);
+optimal_lambda_d3 = x_opt_d3(2);
+
+% Maximium coefficient of power
+max_CP_d3 = -neg_CP_d3;
+
+% Calculating resulting Coefficient of Thrust
+% resulting rotational velocity
+% Calculating resulting forces on the turbine using optimum values
+% resulting force on the turbine
+%resulting CT
+[~, ~, ~, ~, opt_CT_d3] = computeRotorPerformance(wind_vel_d3, ...
+    (optimal_lambda_d3*wind_vel_d3)/R, optimal_pitch_d3, radius, chord, ...
+    twist, alpha, dens_air, visc_air, sections, airfoil_type, ...
+    airfoils, n_blades, area_swept);
+
+
+% Report deliverable 3 results
+fprintf(['\nDeliverable 3 Optimization Results (Wind Velocity =' ...
+    ' 6.9 m/s):\n']);
+fprintf('Iterations: %d\n', output_d3.iterations);
+fprintf('Function Evaluations: %d\n', output_d3.funcCount )
+fprintf('Optimal Pitch Angle: %.2f degrees\n', optimal_pitch_d3);
+fprintf('Optimal Tip Speed Ratio: %.2f\n', optimal_lambda_d3);
+fprintf('Maximum Power Coefficient: %.3f\n', max_CP_d3);
+fprintf('Resulting Thrust Coefficient: %.3f\n', opt_CT_d3);
+
+% Contour plot over to visualize optimization
+figure('Color', 'w');
+
+ % contour with 15 contours
+[C_d3, h_d3] = contour(pitch_grid, lambda_grid, CP_values_d3, 15, ...
+    'LineWidth', 1.2);
+ylabel(colorbar, 'Coefficient of Power (C_P)');
+hold on;
+clabel(C_d3, h_d3, 'Color', 'k','Fontsize',8); %labeling contours
+
+% Plotting rotor speed constraints
+yline(lambda_limits(1), 'm--', 'LineWidth', 1.5); % minimum rotor speed
+yline(lambda_limits(2), 'm-', 'LineWidth', 1.5); % maximum rotor speed
+
+% Plot optimization path, initial guess, and optimal CP
+% optimziation path
+plot(x_steps_d3(:,1), x_steps_d3(:,2), 'r-', 'MarkerFaceColor', 'r', ...
+    'MarkerSize', 5, 'LineWidth', 2);
+% initial gues
+plot(x0_d3(1), x0_d3(2), 'bo', 'MarkerFaceColor', 'b');
+% optimal CP
+plot(optimal_pitch_d3, optimal_lambda_d3, 'o', 'MarkerFaceColor', 'y', ...
+    'MarkerSize', 10);
+
+xlabel('Blade Pitch Angle \beta (degrees)');
+ylabel('Tip Speed Ratio \lambda');
+xlim([-10 10]);
+ylim([5 15]);
+grid on;
+legend('C_P Contours', 'Min Rotor Speed (9.6 RPM)', ...
+    'Max Rotor Speed (15.5 RPM)','Optimization Path', 'Initial Guess', ...
+    'Optimal Design Point', 'Location', 'NorthEast');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Deliverable 4: Determine Required Blade Pitch Angle
+
+% Define the wind speed range from rated to cut-out speed (m/s)
+wind_speeds_d4 = 11:0.5:25;
+
+% Define the range of blade pitch angles to test (degrees)
+pitch_angles_d4 = 0:0.1:360;
+
+% Set initial values for the required pitch angle and maximum power
+required_pitch_d4 = NaN;
+max_power_d4 = NaN;
+
+% Convert the constant rotor speed of 15.5 RPM to rad/s
+omega_d4 = 15.5*pi/30;
+
+% Test each pitch angle, starting from the smallest
+for pitch = pitch_angles_d4
+
+    % Reset maximum power for the current pitch angle
+    maximum_power = 0;
+
+    % Check turbine power at each wind speed
+    for V = wind_speeds_d4
+
+        % Calculate turbine power at the current wind speed and pitch
+        P = calculateTurbinePower(V, omega_d4, pitch, ...
+            radius, chord, twist, alpha, dens_air, ...
+            visc_air, sections, airfoil_type, airfoils, n_blades);
+
+        % Stop testing this pitch angle if the power is invalid
+        if ~isfinite(P)
+            maximum_power = NaN;
+            break
+        end
+
+        % Update the maximum power for this pitch angle
+        maximum_power = max(maximum_power, P);
+    end
+
+    % Check whether the maximum power is within the rated limit
+    if isfinite(maximum_power) && maximum_power <= power_rated
+
+        % Save the first pitch angle that meets the power limit
+        required_pitch_d4 = pitch;
+        max_power_d4 = maximum_power;
+        break
+    end
+end
+
+% Display the results
+if isnan(required_pitch_d4)
+    fprintf('No valid pitch angle found.\n');
+else
+    fprintf('\nDeliverable 4 Results\n');
+    fprintf('Required pitch angle: %.1f degrees\n', ...
+        required_pitch_d4);
+    fprintf('Maximum power in range: %.4f MW\n', ...
+        max_power_d4 / 1e6);
+end
+
+%% Deliverable 4 (Group 29 Specific Wind Speed: 16.4 m/s) -> Feeds Deliverable 5
+U_hub_d4 = 16.4;                    % [m/s] Group 29 assigned wind speed (Q4 & Q5)
+
+required_pitch_g29 = NaN;
+F_thrust_d4        = NaN;
+P_g29              = NaN;
+
+for pitch_test = 0:0.05:45
+    [F_test, ~, P_test, ~, ~] = computeRotorPerformance(U_hub_d4, ...
+        omega_d4, pitch_test, radius, chord, twist, alpha, dens_air, ...
+        visc_air, sections, airfoil_type, airfoils, n_blades, area_swept);
+
+    if ~isfinite(P_test) || ~isfinite(F_test)
+        continue
+    end
+
+    if P_test <= power_rated
+        required_pitch_g29 = pitch_test;
+        P_g29              = P_test;
+        F_thrust_d4        = F_test; % [N] Thrust for deliverable 5
+        break
+    end
+end
+
+fprintf('\nDeliverable 4 Results (Group 29: U = %.1f m/s at 15.5 RPM):\n', U_hub_d4);
+fprintf('Required Pitch Angle: %.2f degrees\n', required_pitch_g29);
+fprintf('Resulting Power: %.4f MW\n', P_g29 / 1e6);
+fprintf('Total Rotor Thrust: %.2f kN (Used in Deliverable 5)\n', F_thrust_d4 / 1e3);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Deliverable 5
+%% 1. CONSTANTS & INPUTS FROM DELIVERABLE 4 (GROUP 29)
+% Turbine & Operating Specifications
+alpha_abl = 1/7; % atmospheric boundary layer exponent
+F_thrust = F_thrust_d4;    % [N] total axial rotor thrust at hub
+
+% Fluid & Material Properties (ASTM A572 Grade 50 Steel)
+E_steel = 200e9; % [Pa] Young's modulus
+g = 9.81; % [m/s^2] gravity
+
+%% 2. PART 1: STATIC DEFORMATION & STATIC NORMAL STRESSES
+[z_tower, w_static, w_hub_static, sigma_axial, sigma_bending, sigma_static_max, ...
+ M_bend, V_shear, P_axial, A_tower, I_tower, OD_tower, m_tower_total] = ...
+    analyzeTowerStatic(tower_data, hub_height, U_hub_d4, F_thrust, m_top, ...
+    dens_air, visc_air, dens_steel, E_steel, alpha_abl, g);
+
+[peak_static_stress, idx_peak] = max(sigma_static_max);
+fprintf('\nDELIVERABLE 5: STRUCTURAL RESULTS\n');
+fprintf('Part 1: Static Deflection & Stress\n');
+fprintf('Total Tower Mass: %.1f kg\n', m_tower_total);
+fprintf('Base Bending Moment: %.2f MN*m\n', M_bend(1) / 1e6);
+fprintf('Max Static Normal Stress: %.2f MPa (at z = %.2f m)\n', peak_static_stress / 1e6, z_tower(idx_peak));
+fprintf('Tower Deflection: %.1f mm (at z = 77.7 m)\n', w_static(end) * 1000);
+fprintf('At Nacelle Deflection: %.1f mm (at z = 80.4 m)\n', w_hub_static * 1000);
+
+%% 3. PART 2: 1-DOF TOWER VIBRATION (pulseFFT) & STRESS SUPERPOSITION
+zeta_tower = 0.015; % structural damping ratio (1.5% for steel)
+nHarmonics = 50; % number of Fourier harmonics (< 500)
+
+[t_vib, x_dyn, F_shadow_pulse, k_tower, m_eq, omega_n, f_n, ...
+ x_dyn_amp, w_total_max, sigma_total_max] = ...
+    analyzeTowerVibration(z_tower, OD_tower, I_tower, w_static, sigma_axial, ...
+    sigma_bending, R, omega_d4, n_blades, F_thrust, m_top, m_tower_total, ...
+    E_steel, zeta_tower, nHarmonics);
+
+fprintf('\nPart 2: Vibration & Dynamic Deflection\n');
+fprintf('Equivalent Stiffness k : %.3f MN/m\n', k_tower / 1e6);
+fprintf('Natural Frequency wn : %.3f rad/s (%.3f Hz)\n', omega_n, f_n);
+fprintf('3P Blade-Pass Freq. : %.3f Hz\n', n_blades * rotor_speed_range(2) / 60);
+fprintf('Oscillatory Amplitude : %.2f mm\n', x_dyn_amp * 1000);
+fprintf('Peak Dynamic Deflection : %.2f mm (including shadow DC offset)\n', max(abs(x_dyn)) * 1000);
+fprintf('Total Tip Deflection : %.2f mm (Static + Dynamic)\n', w_total_max * 1000);
+fprintf('Total Max Bending Stress: %.2f MPa (Superposition at base)\n', sigma_total_max / 1e6);
+
+%% 4. PART 3: COLUMN BUCKLING ANALYSIS (EULER / JOHNSON)
+[L_e, Sr_crit, slend_avg, regime_avg, S_cr_avg, P_cr_avg, SF_buck_avg, ...
+ slend_min, regime_min, S_cr_min, P_cr_min, SF_buck_min] = ...
+    analyzeTowerBuckling(z_tower, A_tower, I_tower, P_axial, E_steel, strength_yield_steel);
+
+fprintf('\nPart 3: Column Buckling Analysis\n');
+fprintf('Effective Length L_e: %.2f m\n', L_e);
+fprintf('Euler/Johnson Threshold : %.2f\n', Sr_crit);
+fprintf('Max Compressive Load: %.2f MN (at base z = 0 m)\n', P_axial(1) / 1e6);
+fprintf('Avg Section (%s): L_e/rho = %.2f | S_cr = %.2f MPa | P_cr = %.2f MN | SF = %.2f\n', ...
+    regime_avg, slend_avg, S_cr_avg / 1e6, P_cr_avg / 1e6, SF_buck_avg);
+fprintf('Top Section (%s): L_e/rho = %.2f | S_cr = %.2f MPa | P_cr = %.2f MN | SF = %.2f\n', ...
+    regime_min, slend_min, S_cr_min / 1e6, P_cr_min / 1e6, SF_buck_min);
+
+%% 5. PART 4: FATIGUE LIFE ANALYSIS (BENDING ONLY)
+% 1) Tower Foundation (Bottom, z = 0 m):
+%    Geometric ratios: D/d = 4420/4159 = 1.063,  r/d = 5/4159 = 0.00120
+Kt_bot = 2; % Kt (foundation)
+q_bot  = 0.67; % q (foundation)
+
+% 2) Tower-Nacelle Joint (Top, z = 77.7 m):
+%    Geometric ratios: D/d = 3036/3030 = 1.002,  r/d = 5/3030 = 0.00165
+Kt_top = 2; % Kt (nacelle)
+q_top  = 0.67; % q (nacelle)
+
+fatigue_res = analyzeTowerFatigue(z_tower, hub_height, OD_tower, I_tower, M_bend, ...
+    R, omega_d4, n_blades, F_thrust, omega_n, zeta_tower, nHarmonics, ...
+    strength_tens_steel, Kt_bot, q_bot, Kt_top, q_top);
+
+fprintf('\nPart 4: Fatigue Analysis\n');
+fprintf('Modified Endurance Limit Se: %.2f MPa\n', fatigue_res.Se_bot / 1e6);
+fprintf('Tip Forces (F_mean / F_alt): %.2f kN / %.2f kN (F_DC = %.2f kN)\n', ...
+    fatigue_res.F_mean / 1e3, fatigue_res.F_alt / 1e3, fatigue_res.F_DC / 1e3);
+fprintf('Bottom Foundation (z = 0 m):\n');
+fprintf('  Nominal Stress (Mean/Bend): %.2f MPa / %.3f MPa\n', ...
+    fatigue_res.sig_mean_bot / 1e6, fatigue_res.sig_bend_bot / 1e6);
+fprintf('  Kf = %.3f | sig_alt = %.3f MPa | SF (Se/sig_alt) = %.2f\n', ...
+    fatigue_res.Kf_bot, fatigue_res.sig_alt_bot / 1e6, fatigue_res.SF_bot);
+fprintf('Top Tower-Nacelle (z = 77.7 m):\n');
+fprintf('  Nominal Stress (Mean/Bend): %.2f MPa / %.3f MPa\n', ...
+    fatigue_res.sig_mean_top / 1e6, fatigue_res.sig_bend_top / 1e6);
+fprintf('  Kf = %.3f | sig_alt = %.3f MPa | SF (Se/sig_alt) = %.2f\n', ...
+    fatigue_res.Kf_top, fatigue_res.sig_alt_top / 1e6, fatigue_res.SF_top);
+
+%% 6. REPORT PLOTS (Q5)
+% Plot 1: Static Deflection Plot (Q5)
+figure('Name', 'Static Deflection Plot')
+plot([w_static; w_hub_static] * 1000, [z_tower; hub_height], 'k', 'LineWidth', 2)
+hold on
+yline(z_tower(end), 'b--', 'Tower Top Flange (77.7 m)', 'LabelHorizontalAlignment', 'left')
+xlabel('Deflection (mm)')
+ylabel('Height (m)')
+grid off
+
+% Plot 2: Bending Stress - Tower Height Plot (Q5)
+figure('Name', 'Bending Stress - Tower Height Plot')
+plot(sigma_bending / 1e6, z_tower, 'k', 'LineWidth', 2)
+xlabel('Bending Stress (MPa)')
+ylabel('Tower Height (m)')
+grid off
+
+% Plot 3: Dynamic Deflection Plot (Q5)
+figure('Name', 'Dynamic Deflection Plot')
+plot(t_vib, x_dyn * 1000, 'k', 'LineWidth', 2)
+xlabel('Time (s)')
+ylabel('Dynamic Tip Deflection x_{dyn} (mm)')
+xlim([0,5])
+grid off
+
+% Plot 4: S-N Plot in Log Scale (Q5 - Required by Rubric)
+figure('Name', 'Q5: S-N Plot in Log Scale')
+loglog(fatigue_res.N_curve, fatigue_res.Sf_curve / 1e6, 'k-', 'LineWidth', 2.0)
+hold on
+legend_entries = {'S-N Fatigue Curve (ASTM A572 Gr. 50)'};
+
+if isfinite(fatigue_res.sig_alt_bot)
+    yline(fatigue_res.sig_alt_bot / 1e6, 'r--', 'LineWidth', 1.5)
+    legend_entries{end+1} = sprintf('Foundation \\sigma_{alt} (%.2f MPa)', fatigue_res.sig_alt_bot / 1e6);
+end
+if isfinite(fatigue_res.sig_alt_top)
+    yline(fatigue_res.sig_alt_top / 1e6, 'b-.', 'LineWidth', 1.5)
+    legend_entries{end+1} = sprintf('Nacelle Joint \\sigma_{alt} (%.2f MPa)', fatigue_res.sig_alt_top / 1e6);
+end
+
+xlim([1e3, 1e8])
+ylim([0.01, 1000])
+xlabel('Number of Cycles to Failure, N (cycles)')
+ylabel('Endurance Strength Se (MPa)')
+legend(legend_entries, 'Location', 'southeast')
+grid off
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Local Functions
+function [F, T, P, CP, CT, force_1_blade, torque_1_blade, CD_r, CL_r] = ...
+    computeRotorPerformance(U, omega, pitch, radius, chord, twist, alpha, ...
+    density, viscosity, sections, airfoil_type, airfoils, n_blades, ...
+    area_swept, alpha_prime_r)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: computeRotorPerformance
+%
+% PURPOSE:
+% Computes rotor thrust, torque, power, power coefficient (CP), and thrust
+% coefficient (CT) from blade element momentum induction and airfoil loads.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if nargin < 15 || isempty(alpha_prime_r)
+        [alpha_prime_r, ~, ~] = calculateInductionFactors(radius, U, omega, alpha);
+    end
+
+    [~, ~, Fz_prime, Ftheta_prime, ~, ~, CD_r, CL_r] = calculateDragLift( ...
+        U, omega, radius, alpha, alpha_prime_r, pitch, twist, chord, ...
+        density, viscosity, sections, airfoil_type, airfoils);
+
+    if any(~isfinite(Fz_prime)) || any(~isfinite(Ftheta_prime))
+        [F, T, P, CP, CT] = deal(NaN);
+        force_1_blade = NaN;
+        torque_1_blade = NaN;
+        return
+    end
+
+    force_1_blade  = cumtrapz(radius, Fz_prime);
+    torque_1_blade = cumtrapz(radius, (radius .* Ftheta_prime));
+    F  = n_blades * max(force_1_blade);
+    T  = n_blades * max(torque_1_blade);
+    P  = T * omega;
+    CT = 2 * F / (density * (U^2) * area_swept);
+    CP = 2 * P / (density * (U^3) * area_swept);
+end
+
+% Calculates local speed ratio, lambda_r, tip speed ratio, lambda, and
+% local angular induction factor, alpha_prime
+function [alpha_prime_r, lambda_r, lambda] = ...
+    calculateInductionFactors(radius, wind_vel, rot_velocity, alpha)
+   
+    lambda_r = (rot_velocity.*radius)/wind_vel;
+    lambda = max(lambda_r);
+    
+    alpha_prime_r = 0.5*(-1+sqrt(1+(4./(lambda_r.^2))*alpha*(1-alpha)));
+end
+
+% Calculates the lift, drag, z, and theta forces per length of the blade
+function [FL_prime, FD_prime, Fz_prime, Ftheta_prime, Urel, AoA,... 
+    CD_values, CL_values] = calculateDragLift(U, omega, r, alpha, ...
+    alpha_prime, pitch, twist, chord, density, viscosity, ...
+    sections, names, airfoils)
+    
+    % Calculating velocities along z and theta axes
+    Uz = U.*(1 - alpha); % Velocity along z axis
+    Utheta = r.*omega.*(1 + alpha_prime);  % Velocity along theta axis 
+    
+    % Calculating the magnitude of the relative wind velocity
+    Urel = sqrt(Uz.^2 + Utheta.^2);
+
+    % Calculating phi,from inverse tangent of Uz and Utheta
+    phi = atan2(Uz, Utheta);
+
+    % Angle of Attack 
+    AoA = phi - deg2rad(pitch) - twist; 
+    AoA_deg = rad2deg(AoA); % Convert AoA to degrees
+    
+    % Calculating drag and lift coefficients for each section of the blade
+    CL_values=zeros(sections, 1);%Array to fill with drag coeffcient values
+    CD_values=zeros(sections, 1);%Array to fill with lift coeffcient values
+
+    % Loop of each section along the blade to select airfoil data and
+    % determine coefficients of lift and drag
+
+    for i = 1:sections
+        section_airfoil = char(names(i));
+        c_AoA = AoA_deg(i); % AoA that is being looped through
+    
+        % Determine CD and CL for cylindrical blade sections using
+        % Reynold's Number 
+        if contains(section_airfoil, 'circle')
+            CL_values(i) = 0; % Lift is zero at Cylindrical section
+            
+            % Compute Reynolds number based on relative velocity and
+            % characteristic legnth (chord distance)
+            Re = (density*Urel(i)*chord(i))/viscosity;
+            
+            % Calculate Drag Coefficient via drag coefficient function
+            CD_values(i) = cylinderCD(Re);
+        else
+            % Matching airfoil tables and storing CL and CD
+            if contains(section_airfoil, 'DU 91-W2-250')
+                airfoil_table = airfoils.DU91;
+            elseif contains(section_airfoil, 'DU 93-W-210')
+                airfoil_table = airfoils.DU93;
+            elseif contains(section_airfoil, 'DU 96-W-180')
+                airfoil_table = airfoils.DU96;
+            elseif contains(section_airfoil, 'DU 97-W-300')
+                airfoil_table = airfoils.DU97;
+            end
+            CL_values(i) = interp1(airfoil_table.AoA, airfoil_table.CL, ...
+                c_AoA, 'linear','extrap');
+            CD_values(i) = interp1(airfoil_table.AoA, airfoil_table.CD, ...
+                c_AoA, 'linear','extrap');
+        end
+    end
+    
+    % Determing drag and lift forces/length along blade
+    % Lift force/length [N/m]
+    FL_prime = 0.5*density.*(Urel.^2).*chord.*CL_values;
+    % Drag force/length [N/m]
+    FD_prime = 0.5*density.*(Urel.^2).*chord.*CD_values;
+    
+    % Converting Lift and Drag into z and theta forces 
+    Fz_prime = FL_prime.*cos(phi) + FD_prime.*sin(phi); 
+    Ftheta_prime = FL_prime.*sin(phi) - FD_prime.*cos(phi);
+end
+
+
+function [C_D] = cylinderCD(Re)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: cylinderCD
+%
+% PURPOSE:
+% To calculate and return the coeffecient of drag for a cyliner in cross
+% flow.
+%
+% Fit functions can be found in references:
+%
+% - White, F.M. (2006) Viscous Fluid Flow. 3rd Edition, McGraw-Hill, Boston.
+% - Nian-Sheng Cheng, *Calculation of Drag Coefficient for Arrays of ...
+% Emergent Circular Cylinders with Pseudofluid Model.*...
+% J. Hydraul. Eng. 2013.139:602-611.
+%
+% INPUT
+% Re - Reynolds number [-]
+%
+% OUTPUT
+% C_D - drag coeffecient [-]
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% AUTHOR: MJA
+% DATE: 2024.10.21
+%
+% DESCRIPTION OF LOCAL VARIABLES
+%
+%
+% FUNCTIONS CALLED
+% log10 (MATLAB)
+% tanh (MATLAB)
+%
+% START OF EXECUTABLE CODE
+%
+% piecewise fit functions based on various reynolds number regimes for a
+% cylinder in cross-flow
+    if Re <= 0
+        C_D = 0;
+    elseif Re < 2*10^5
+        C_D = 11 * Re.^(-0.75) + 0.9 * (1.0 - exp(-1000./Re))...
+        + 1.2 * (1.0 -exp(-(Re./4500).^0.7));
+    elseif Re <= 5*10^5
+        C_D = 10.^(0.32*tanh(44.4504 - 8 * log10 (Re))-0.238793158);
+    else
+        C_D = 0.1 * log10(Re) - 0.2533429;
+    end
+end
+
+% Function to record iteration steps
+function stop = outfun_d3(x, optimValues, state)
+    stop = false; % Keeps solver running
+    global x_steps_d3;
+    if strcmp(state, 'iter')
+        % Stores pitch angle and tip speed ratio at each step
+        x_steps_d3 = [x_steps_d3; x]; 
+    end
+end
+
+% Function to calculate the negative CP values for deliverable 3, minimal
+% negative CP is maximum CP
+function [neg_CP, opt_CT] = obj_neg_CP(x, wind_vel, R, radius, ...
+    alpha, twist, chord, dens_air, visc_air, sections, airfoil_type, ...
+    airfoils, n_blades, area_swept)
+    % pitch angle, tip speed ratio, and rotational velocity values
+    % Calculating angle induction factors and forces on the turbine blade
+    % using functions
+    % Determining coefficient of power
+    [~, ~, ~, CP, opt_CT] = computeRotorPerformance(wind_vel, ...
+        (x(2)*wind_vel)/R, x(1), radius, chord, twist, alpha, dens_air, ...
+        visc_air, sections, airfoil_type, airfoils, n_blades, area_swept);
+    
+    neg_CP = -CP; % Returning negative CP to maximize CP
+    
+end
+
+function P = calculateTurbinePower(V, omega, pitch, ...
+    radius, chord, twist, alpha, density, viscosity, ...
+    sections, airfoil_type, airfoils, n_blades)
+
+    % Calculate the induction factors along the blade
+    % Calculate the tangential force per unit blade length
+    % Return NaN if any tangential force value is invalid
+    % Integrate the tangential force along the blade to find torque
+    % Calculate total rotor torque from all blades
+    % Calculate power from torque and angular velocity (W)
+    [~, ~, P, ~, ~] = computeRotorPerformance(V, omega, pitch, radius, ...
+        chord, twist, alpha, density, viscosity, sections, airfoil_type, ...
+        airfoils, n_blades, 1);
+end
+% Deliverble 5 Functions
+function [z, deflection, w_hub, sigma_axial, sigma_bending, sigma_comp_max, ...
+          M_bend, V_shear, P_axial, A, I, OD, m_tower_total] = ...
+          analyzeTowerStatic(tower_data, hub_height, U_hub, F_thrust, m_top, ...
+          dens_air, visc_air, dens_steel, E_steel, alpha_abl, g)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: analyzeTowerStatic
+%
+% PURPOSE:
+% Computes internal shear, bending moment, axial loads, normal stresses,
+% and static lateral deflection (via ODE45) for a tapered wind turbine
+% tower subjected to rotor thrust and atmospheric boundary layer wind drag.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    z_raw = tower_data{:, 1} / 1000; % extracting height
+    OD_raw = tower_data{:, 2} / 1000; % outer diameter
+    t_raw = tower_data{:, 3} / 1000; % thickness
+
+    L_tower = max(z_raw); % [m] steel tower height (77.7 m)
+    z_offset = hub_height - L_tower; % [m] nacelle offset (2.7 m)
+
+    N_nodes = 1000;
+    z = linspace(0, L_tower, N_nodes)';
+    OD = interp1(z_raw, OD_raw, z, 'linear');
+    t = interp1(z_raw, t_raw,  z, 'linear');
+    ID = OD - 2 .* t;
+
+    A = (pi/4) .* (OD.^2 - ID.^2); % cross-section area
+    I = (pi/64) .* (OD.^4 - ID.^4); % inertia
+
+    m_tower = dens_steel .* A; % mass of tower per section
+    m_tower_total = trapz(z, m_tower); % total tower mass
+
+    % Atmospheric Boundary Layer wind profile & distributed tower drag
+    U_tower = U_hub .* (z ./ hub_height).^alpha_abl;
+    Re_tower = (dens_air .* U_tower .* OD) ./ visc_air;
+    CD_tower = arrayfun(@cylinderCD, Re_tower);
+    q_wind = 0.5 * dens_air .* (U_tower.^2) .* CD_tower .* OD;
+
+    % Integrate internal shear V(z), moment M(z), and axial force P(z)
+    V_shear = F_thrust + flipud(cumtrapz(flipud(z), flipud(q_wind))) * (-1);
+    M_bend = (F_thrust * z_offset) + flipud(cumtrapz(flipud(z), flipud(V_shear))) * (-1);
+
+    w_tower = m_tower .* g;
+    P_axial = (m_top * g) + flipud(cumtrapz(flipud(z), flipud(w_tower))) * (-1);
+
+    % Solve Euler-Bernoulli beam deflection
+    beamODE = @(z_eval, Y) [ ...
+        Y(2); ...
+        interp1(z, M_bend, z_eval, 'linear') / (E_steel * interp1(z, I, z_eval, 'linear')) ...
+    ];
+
+    opts = odeset('RelTol', 1e-8, 'AbsTol', 1e-10);
+    [~, Y_sol] = ode45(beamODE, z, [0; 0], opts);
+
+    deflection = Y_sol(:, 1);
+    slope = Y_sol(:, 2);
+    w_hub = deflection(end) + slope(end) * z_offset;
+
+    % Static normal stresses & yield factor of safety
+    sigma_axial = P_axial ./ A;
+    sigma_bending = (M_bend .* (OD / 2)) ./ I;
+    sigma_comp_max = sigma_axial + sigma_bending;
+end
+
+function [t, x_dyn, F_pulse, k_eq, m_eq, omega_n, f_n, x_osc_amp, ...
+          w_total_max, sigma_total_max] = ...
+          analyzeTowerVibration(z, OD, I, w_static, sigma_axial, sigma_bending, ...
+          R, omega_rotor, n_blades, F_thrust, m_top, m_tower, E_steel, zeta, nHarmonics)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: analyzeTowerVibration
+%
+% PURPOSE:
+% Models the wind turbine tower as a 1-DOF damped harmonic oscillator
+% subjected to periodic blade-passing tower shadow pulses using pulseFFT,
+% and computes total combined bending stress via tip deflection superposition.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    L_tower = z(end);
+
+    % 1. Equivalent Stiffness, Rayleigh Mass, and Natural Frequency
+    k_eq = (3 * E_steel * mean(I)) / (L_tower^3);
+    m_eq = m_top + 0.23 * m_tower;
+    omega_n = sqrt(k_eq / m_eq);
+    f_n = omega_n / (2 * pi);
+
+    % 2. Tower Shadow Square-Wave Pulse Parameters
+    % 3. Fourier Decomposition via pulseFFT
+    % 4. Steady-State 1-DOF Harmonic Response
+    [t, F_DC, ~, u_osc, F_pulse] = computeTowerShadowResponse(mean(OD), R, ...
+        omega_rotor, n_blades, F_thrust, omega_n, zeta, nHarmonics);
+
+    x_dc = F_DC / k_eq;
+    x_osc = u_osc / k_eq;
+    x_dyn = x_dc + x_osc;
+    x_osc_amp = max(abs(x_osc));
+
+    % 5.Static + Dynamic Tip Deflection for Max Stress
+    w_stat_tip = w_static(end);
+    x_dyn_peak = max(abs(x_dyn));
+    w_total_max = w_stat_tip + x_dyn_peak;
+
+    dyn_amp_factor = 1 + (x_dyn_peak / w_stat_tip);
+    sigma_total_max = sigma_axial(1) + sigma_bending(1) * dyn_amp_factor;
+end
+
+function [L_e, Sr_crit, slend_avg, regime_avg, S_cr_avg, P_cr_avg, SF_buck_avg, ...
+          slend_min, regime_min, S_cr_min, P_cr_min, SF_buck_min] = ...
+          analyzeTowerBuckling(z, A, I, P_axial, E_steel, sigma_y)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: analyzeTowerBuckling
+%
+% PURPOSE:
+% Evaluates global column buckling of the wind turbine tower using
+% effective length L_e = 2.1*L, radius of gyration rho = sqrt(I/A),
+% and Euler / Johnson critical buckling stress criteria.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    L_tower = z(end); % [m] tower height (77.7 m)
+    L_e = 2.1 * L_tower; % [m] effective column length
+    P_max = P_axial(1); % [N] max compressive force at base
+
+    % Euler-Johnson transition slenderness ratio
+    Sr_crit = sqrt((2 * pi^2 * E_steel) / sigma_y);
+
+    % 1. Average cross-section evaluation
+    [slend_avg, regime_avg, S_cr_avg, P_cr_avg, SF_buck_avg] = ...
+        evalBucklingSection(mean(A), mean(I), L_e, Sr_crit, P_max, E_steel, sigma_y);
+
+    % 2. Conservative minimum cross-section evaluation (top flange)
+    [slend_min, regime_min, S_cr_min, P_cr_min, SF_buck_min] = ...
+        evalBucklingSection(A(end), I(end), L_e, Sr_crit, P_max, E_steel, sigma_y);
+end
+
+function [slend, regime, S_cr, P_cr, SF_buck] = evalBucklingSection( ...
+    A_sec, I_sec, L_e, Sr_crit, P_max, E_steel, sigma_y)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: evalBucklingSection
+%
+% PURPOSE:
+% Computes slenderness ratio, Euler/Johnson critical stress, critical load,
+% and buckling safety factor for a specified tower cross-section.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    slend = L_e / sqrt(I_sec / A_sec);
+    if slend > Sr_crit
+        regime = 'Euler';
+        S_cr = (pi^2 * E_steel) / (slend^2);
+    else
+        regime = 'Johnson';
+        S_cr = sigma_y - ((sigma_y^2) * (slend^2)) / (4 * pi^2 * E_steel);
+    end
+    P_cr = S_cr * A_sec;
+    SF_buck = P_cr / P_max;
+end
+
+function res = analyzeTowerFatigue(z, hub_height, OD, I, M_bend, ...
+    R, omega_rotor, n_blades, F_thrust, omega_n, zeta, nHarmonics, ...
+    Su, Kt_bot, q_bot, Kt_top, q_top)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: analyzeTowerFatigue
+%
+% PURPOSE:
+% Performs bending-only high-cycle fatigue analysis at the tower foundation
+% (bottom) and tower-nacelle joint (top) using Norton correction factors,
+% pulseFFT harmonic transmissibility (TR), stress concentration (Kf), and
+% generates the log-scale S-N curve.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    L_tower  = z(end);
+    z_offset = hub_height - L_tower; % nacelle offset
+
+    % 1. Endurance Limit Correction Factors (Bending Only)
+    C_load    = 1.0; % pure bending (axial & shear neglected)
+    C_surface = 0.8; % machined surface
+    C_temp    = 1.0; % ambient temperature
+    C_reliab  = 0.897; % 90% reliability
+    Se_prime  = 0.5 * Su; % [Pa] uncorrected endurance limit
+
+    % Piecewise C_size based on outer diameter d [mm]
+    C_common = C_load * C_surface * C_temp * C_reliab * Se_prime;
+    res.Se_bot = calcSizeFactor(OD(1) * 1000) * C_common;
+    res.Se_top = calcSizeFactor(OD(end) * 1000) * C_common;
+
+    % 2. Dynamic Tip Forces from pulseFFT & Transmissibility Ratio (TR)
+    % Reconstruct dynamic tip force F_dyn(t) = F_DC + sum((F_i * TR_i)*cos(...))
+    [~, res.F_DC, F_dyn, ~, ~] = computeTowerShadowResponse(mean(OD), R, ...
+        omega_rotor, n_blades, F_thrust, omega_n, zeta, nHarmonics);
+
+    res.F_mean = F_thrust + res.F_DC;
+    res.F_alt = (max(F_dyn) - min(F_dyn)) / 2;
+    F_max = res.F_mean + res.F_alt;
+    F_min = res.F_mean - res.F_alt;
+
+    % 3. Bending Moments & Nominal Stresses at Bottom (z = 0) and Top (z = 77.7 m)
+    % Retain distributed tower wind-drag moment at the base from Part 1
+    M_wind_base = M_bend(1) - F_thrust * hub_height;
+
+    % 4. Fatigue Stress Concentration Factor Kf & Safety Factor SF
+    [res.sig_mean_bot, res.sig_bend_bot, res.Kf_bot, res.sig_alt_bot, res.SF_bot] = ...
+        evalFatigueSection(F_max * hub_height + M_wind_base, ...
+        F_min * hub_height + M_wind_base, OD(1), I(1), res.Se_bot, Kt_bot, q_bot);
+
+    [res.sig_mean_top, res.sig_bend_top, res.Kf_top, res.sig_alt_top, res.SF_top] = ...
+        evalFatigueSection(F_max * z_offset, F_min * z_offset, ...
+        OD(end), I(end), res.Se_top, Kt_top, q_top);
+
+    % 5. Log-Scale S-N Curve (10^3 <= N <= 10^6, plus endurance plateau to 10^8)
+    N_finite = logspace(3, 6, 200);
+    log10_Sf = (1/3) * log10(res.Se_bot / (0.9 * Su)) .* log10(N_finite) ...
+                 + log10(((0.9 * Su)^2) / res.Se_bot);
+    Sf_finite = 10.^log10_Sf;
+
+    N_plateau = logspace(6, 8, 50);
+    Sf_plateau = res.Se_bot * ones(size(N_plateau));
+
+    res.N_curve = [N_finite, N_plateau(2:end)];
+    res.Sf_curve = [Sf_finite, Sf_plateau(2:end)];
+end
+
+function [t, F_DC, F_dyn, u_osc, F_pulse] = computeTowerShadowResponse( ...
+    D_avg, R, omega_rotor, n_blades, F_thrust, omega_n, zeta, nHarmonics)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: computeTowerShadowResponse
+%
+% PURPOSE:
+% Computes the 3P tower shadow pulse Fourier components via pulseFFT and
+% evaluates the steady-state 1-DOF harmonic response over 4 blade passes.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    freq_3P     = n_blades * (omega_rotor / (2 * pi));
+    T_3P        = 1 / freq_3P;
+    pulseWidth  = (D_avg / (R / 2)) / omega_rotor;
+    pulseHeight = -F_thrust / n_blades;
+
+    [fourierMag, fourierPhase] = pulseFFT(freq_3P, pulseWidth, pulseHeight, nHarmonics);
+
+    t = linspace(0, 4 * T_3P, 2000)';
+    F_DC = fourierMag(1);
+    F_pulse = F_DC * ones(size(t));
+    u_osc = zeros(size(t));
+
+    for idx = 2:nHarmonics
+        w_i = 2 * pi * (idx - 1) * freq_3P;
+        r_i = w_i / omega_n;
+        TR_i = 1 / sqrt((1 - r_i^2)^2 + (2 * zeta * r_i)^2);
+        psi_i = atan2(2 * zeta * r_i, 1 - r_i^2);
+
+        F_pulse = F_pulse + fourierMag(idx) * cos(w_i * t + fourierPhase(idx));
+        u_osc = u_osc + (fourierMag(idx) * TR_i) * cos(w_i * t + fourierPhase(idx) - psi_i);
+    end
+
+    F_dyn = F_DC + u_osc;
+end
+
+function [sig_mean, sig_bend, Kf, sig_alt, SF] = evalFatigueSection( ...
+    M_max, M_min, OD_sec, I_sec, Se, Kt, q)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FUNCTION NAME: evalFatigueSection
+%
+% PURPOSE:
+% Computes nominal mean/alternating bending stresses, fatigue stress
+% concentration factor Kf, alternating stress, and fatigue safety factor.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    sig_max  = (M_max * (OD_sec / 2)) / I_sec;
+    sig_min  = (M_min * (OD_sec / 2)) / I_sec;
+    sig_mean = (sig_max + sig_min) / 2;
+    sig_bend = (sig_max - sig_min) / 2;
+    Kf       = 1 + q * (Kt - 1);
+    sig_alt  = Kf * sig_bend;
+    SF       = Se / sig_alt;
+end
+
+function C_size = calcSizeFactor(d_mm)
+% Piecewise size factor C_size from diameter d in mm
+    if d_mm <= 8
+        C_size = 1.0;
+    elseif d_mm <= 250
+        C_size = 1.189 * (d_mm ^ -0.097);
+    else
+        C_size = 0.6;
+    end
+end
+
+function [ fourierTermMag, fourierTermPhase  ] = ...
+   pulseFFT( freq, pulseWidth, pulseHeight, nHarmonics )
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  FUNCTION NAME: pulseFFT
+%
+%  PURPOSE
+%    Determine the frequency components of a harmonic pulse
+%    having constant magnitude
+%
+%  INPUT
+%    freq: Frequency of the input pulses (Hz)
+%    nHarmonics: # of harmonics to include in the Fourier series
+%                NOTE 1: The fundamental frequency is counted as
+%                        the "first" harmonic
+%                NOTE 2: nHarmonics must be < 500 due to the
+%                        sampling rate assumed in this function
+%    pulseHeight: Magnitude of the pulse 
+%                 NOTE: Units must be consistent with forceMag
+%    pulseWidth: Width of the pulse (sec)
+%                NOTE: pulseWidth must be less than 1/freq!
+%
+%  OUTPUT
+%    fourierTermMag: Magnitudes of the harmonic terms 
+%                    (same units as pulseHeight)
+%            NOTE 1: Units must be consistent with pulseHeight
+%            NOTE 2: forceMag(1) = DC component
+%                    forceMag(2) = magnitude of fundamental freq
+%                    forceMag(3) = magnitude of 1st harmonic
+%                                  (2X fundamental freq)
+%                    forceMag(i) = magnitude of (i-2)nd harmonic
+%                                  ((i-2)X fundamental freq)
+%   fourierTermPhase: Phase angles of the harmonic terms (radians)
+%                     (see Note 2 above for meaning of each term)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%  AUTHOR: F. Kelso & T. Chase
+%  DATE: 10/25/24
+%
+%  DESCRIPTION OF LOCAL VARIABLES
+%    ampPhase: Complex number representation of the raw
+%              amplitude and phase of one harmonic component
+%              of the input pulse
+%    denom: Scaling factor to convert the raw digital representation
+%           of the discrete Fourier transform of the input signal
+%           to a usable magnitude and phase angle
+%    index: Loop counter index
+%    nPts: Number of points used to digitally sample the pulse
+%    nPulse: Number of points of the digital signal 
+%            that the pulse is "on" (between 0 and nPts)
+%    pulseFrac: Fraction of the signal period that the pulse is "on"
+%    samplePeriod: Period of the digital sample
+%    signal: Raw discrete Fourier transform of the input pulse
+%    sigPeriod: Period of the input signal (s)
+%    sqrPulse: Array representing the pulse as a function of time
+%              over the period of the input signal
+%
+%  FUNCTIONS CALLED
+%    fft: Standard MATLAB function for performing a
+%         discrete Fourier transform of an input vector
+%    floor: Standard MATLAB function for rounding down
+%           to the nearest integer toward infinity of a real number
+%    round: standard MATLAB function for rounding a real number
+%           to the closest integer
+%    zeros: standard MATLAB function for creating an array of zeros
+%
+%  START OF EXECUTABLE CODE
+%
+%  Check for a legal number of harmonics
+%
+   if nHarmonics >= 500
+%
+%  Too many harmonics requested.
+%  All return arguments must be set to something to avoid a MATLAB error.
+%
+      fourierTermMag = NaN;
+      fourierTermPhase = NaN;
+      return
+   end
+%
+%  Determine period of cyclical pulse
+%
+   sigPeriod = 1.0 / freq;
+%
+%  Check for a legal pulse width
+%
+   if pulseWidth >= sigPeriod
+%
+%  Input is not a pulse!
+%  All return arguments must be set to something to avoid a MATLAB error.
+%
+      fourierTermMag = NaN;
+      fourierTermPhase = NaN;
+      return
+   end
+%
+%  Assume that signal is sampled using 1000 data points
+%
+   nPts = 1000;  
+%
+%  Determine period of sample
+%
+   samplePeriod = sigPeriod / nPts;
+%
+%  Determine fraction of the period where pulse is "on"
+%
+   pulseFrac = pulseWidth / sigPeriod; 
+%
+%  Define an array defining the pulse as a function of time...
+%
+%  ...Start with "off"
+%
+   sqrPulse = zeros( 1, nPts );
+%
+%  ...Now add the "on"
+%     (+1 accounts for the pulse being "on" at zero time)
+%
+   nPulse = round( pulseFrac * nPts ) + 1; 
+   sqrPulse( 1:nPulse ) = pulseHeight;
+%
+%  Perform a discrete Fourier transform on the input pulse
+
+   signal = fft( sqrPulse ); %(complex) components of the input pulse
+%
+%  Convert the raw complex components of the input pulse
+%  to magnitudes and angles...
+%  (A reference needs to be added here to explain the theory behind
+%   what is being done)
+%
+%  ...Reserve space for the output arrays
+%
+   fourierTermMag = zeros( 1, nHarmonics );
+   fourierTermPhase = zeros( 1, nHarmonics );
+%
+%  ...Determine the scale factor
+%
+   denom = floor( nPts );
+%
+%  ...Set the magnitude and phase angle (0) of the DC component
+%     of the signal
+%
+   fourierTermMag( 1 ) = signal( 1, 1 ) / denom;
+   fourierTermPhase( 1 ) = 0.0;
+%
+%  ...Calculate all harmonics requested by the user
+%
+   for index = 2:nHarmonics
+%
+%  ...Capture the complex # representation of one harmonic
+%
+      ampPhase = 2.0 * signal( index ) / denom;
+%
+%  ...Convert to magnitude and phase angle
+%
+      fourierTermMag( index ) = abs( ampPhase );
+      fourierTermPhase( index ) = angle( ampPhase );
+   end
+end
