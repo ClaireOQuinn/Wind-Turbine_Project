@@ -50,7 +50,7 @@ airfoils.DU96 = readtable('DU96-W-180.csv');
 airfoils.DU97 = readtable('DU97-W-300.csv');
 
 % Convert mm to m and store blade data 
-radius = Blade_data.DistanceFromCenterOfRotation/1000; % [m] radial position
+radius = Blade_data.DistanceFromCenterOfRotation/1000; %[m] radial position
 chord = Blade_data.ChordLength/1000; % [m]
 twist = deg2rad(Blade_data.BladeTwist); % [rad]
 airfoil_type = Blade_data.Airfoil;
@@ -69,7 +69,7 @@ sections = height(Blade_data);
 
 % Compute rotor thrust, torque, power coefficient (CP), thrust coefficient
 % (CT), spanwise load distributions, and radial drag/lift coefficients
-[F, T, ~, Coeff_power, Coeff_thrust, force_1_blade, torque_1_blade, CD_r, CL_r] = ...
+[F, T,~,Coeff_power,Coeff_thrust,force_1_blade,torque_1_blade,CD_r, CL_r] = ...
     computeRotorPerformance(wind_vel, rot_velocity, pitch, radius, chord, ...
     twist, alpha, dens_air, visc_air, sections, airfoil_type, airfoils, ...
     n_blades, area_swept);
@@ -143,12 +143,12 @@ plot(pitch_values, CP_values, 'k-', 'LineWidth', 2);
 hold on
 plot(optimal_pitch, max_CP, 'ko-','LineWidth', 1, 'MarkerFaceColor','k')
 text(optimal_pitch, max_CP, '  Optimized Pitch Angle', ...
-    'VerticalAlignment', 'middle');
+    'VerticalAlignment', 'middle', 'FontName','Times New Roman');
 xlim([-30 30]);
 ylim([0 0.5]);
 xticks(-30:5:30);
-xlabel('Pitch Angle \beta (degrees)');
-ylabel('Coefficient of Power (C_P)');
+xlabel('Pitch Angle \beta (degrees)', 'FontName','Times New Roman');
+ylabel('Coefficient of Power (C_P)', 'FontName','Times New Roman');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Varying blade pitch angle and tip speed ratio for max CP for an 
@@ -469,7 +469,7 @@ E_steel = 200e9; % [Pa] young's modulus
 g = 9.81; % [m/s^2] gravity
 
 % 2. Static deformation & normal stresses
-[z_tower, w_static, w_hub_static, sigma_axial, sigma_bending, sigma_static_max, ...
+[z_tower, w_static,w_hub_static,sigma_axial,sigma_bending, sigma_static_max, ...
  M_bend, V_shear, P_axial, A_tower, I_tower, OD_tower, m_tower_total] = ...
     analyzeTowerStatic(tower_data, hub_height, U_hub_d4, F_thrust, m_top, ...
     dens_air, visc_air, dens_steel, E_steel, alpha_abl, g);
@@ -477,17 +477,21 @@ g = 9.81; % [m/s^2] gravity
 [peak_static_stress, idx_peak] = max(sigma_static_max);
 fprintf('\nDeliverable 5 results\n');
 fprintf('Part 1: Static Deflection & Stress\n');
-fprintf('Max Static Normal Stress: %.2f MPa (at z = %.2f m)\n', peak_static_stress / 1e6, z_tower(idx_peak));
-fprintf('Tower Deflection: %.1f mm (at z = 77.7 m)\n', w_static(end) * 1000);
-fprintf('At Nacelle Deflection: %.1f mm (at z = 80.4 m)\n', w_hub_static * 1000);
+fprintf('Max Static Normal Stress: %.2f MPa (at z = %.2f m)\n', ...
+    peak_static_stress / 1e6, z_tower(idx_peak));
+fprintf('Tower Deflection: %.1f mm (at z = 77.7 m)\n',w_static(end) * 1000);
+fprintf('At Nacelle Deflection: %.1f mm (at z = 80.4 m)\n', ...
+    w_hub_static * 1000);
 
 % Plot static deflection
 figure('Name', 'Static Deflection Plot')
-plot([w_static; w_hub_static] * 1000, [z_tower; hub_height], 'k-', 'LineWidth', 2)
+plot([w_static; w_hub_static] * 1000, [z_tower; hub_height], 'k-', ...
+    'LineWidth', 2)
 hold on
-yline(z_tower(end), 'b--', 'Tower Top Flange (77.7 m)', 'LabelHorizontalAlignment', 'left')
-xlabel('Deflection (mm)')
-ylabel('Height (m)')
+yline(z_tower(end), 'b--', 'Tower Top Flange (77.7 m)', ...
+    'LabelHorizontalAlignment', 'left', 'FontName','Times New Roman')
+xlabel('Deflection (mm)','FontName','Times New Roman')
+ylabel('Tower Height (m)','FontName','Times New Roman')
 grid off
 
 % 3. Vibration & stress superposition
@@ -502,50 +506,54 @@ nHarmonics = 50; % number of Fourier harmonics (< 500)
 
 fprintf('\nPart 2: Vibration & Dynamic Deflection\n');
 fprintf('Natural Frequency wn : %.3f rad/s (%.3f Hz)\n', omega_n, f_n);
-fprintf('3P Blade-Pass Freq. : %.3f Hz\n', n_blades * rotor_speed_range(2) / 60);
+fprintf('3P Blade-Pass Freq. : %.3f Hz\n',n_blades*rotor_speed_range(2)/60);
 fprintf('Peak Dynamic Deflection : %.2f mm\n', max(abs(x_dyn)) * 1000);
-fprintf('Total Tip Deflection : %.2f mm (Static + Dynamic)\n', w_total_max * 1000);
+fprintf('Total Tip Deflection : %.2f mm (Static + Dynamic)\n', ...
+    w_total_max * 1000);
 fprintf('Total Max Bending Stress: %.2f MPa\n', sigma_total_max / 1e6);
 
 % Plot bending stress vs tower height
 figure('Name', 'Bending Stress')
 plot(sigma_bending / 1e6, z_tower, 'k-', 'LineWidth', 2)
-xlabel('Bending Stress (MPa)')
-ylabel('Tower Height (m)')
+xlabel('Bending Stress (MPa)','FontName','Times New Roman')
+ylabel('Tower Height (m)','FontName','Times New Roman')
 grid off
 
 % Plot dynamic deflection
 figure('Name', 'Dynamic Deflection Plot')
 plot(t_vib, x_dyn * 1000, 'k-', 'LineWidth', 2)
-xlabel('Time (s)')
-ylabel('Dynamic Tip Deflection x_{dyn} (mm)')
+xlabel('Time (s)','FontName','Times New Roman')
+ylabel('Dynamic Tip Deflection x_{dyn} (mm)','FontName','Times New Roman')
 xlim([0,5.15])
 grid off
 
-%% 4. PART 3: COLUMN BUCKLING ANALYSIS (EULER / JOHNSON)
+%% 4. Column Buckling Analysis (Euler/Johnson)
 [L_e, Sr_crit, slend_avg, regime_avg, S_cr_avg, P_cr_avg, SF_buck_avg, ...
  slend_min, regime_min, S_cr_min, P_cr_min, SF_buck_min] = ...
-    analyzeTowerBuckling(z_tower, A_tower, I_tower, P_axial, E_steel, strength_yield_steel);
+    analyzeTowerBuckling(z_tower, A_tower, I_tower, P_axial, E_steel, ...
+    strength_yield_steel);
 
 fprintf('\nPart 3: Column Buckling Analysis\n');
 fprintf('Euler/Johnson Threshold : %.2f\n', Sr_crit);
-fprintf('Avg Section (%s): P_cr = %.2f MN | SF = %.2f\n', regime_avg, P_cr_avg / 1e6, SF_buck_avg);
-fprintf('Top Section (%s): P_cr = %.2f MN | SF = %.2f\n', regime_min, P_cr_min / 1e6, SF_buck_min);
+fprintf('Avg Section (%s): P_cr = %.2f MN | SF = %.2f\n', regime_avg, ...
+    P_cr_avg / 1e6, SF_buck_avg);
+fprintf('Top Section (%s): P_cr = %.2f MN | SF = %.2f\n', regime_min, ...
+    P_cr_min / 1e6, SF_buck_min);
 
-%% 5. PART 4: FATIGUE LIFE ANALYSIS (BENDING ONLY)
-% 1) Tower Foundation (Bottom, z = 0 m):
+%% 5. Fatigue Analysis (Bending Only)
+% Tower Foundation (Bottom, z = 0 m)
 %    Geometric ratios: D/d = 4420/4159 = 1.063,  r/d = 5/4159 = 0.00120
 Kt_bot = 2; % Kt (foundation)
 q_bot  = 0.67; % q (foundation)
 
-% 2) Tower-Nacelle Joint (Top, z = 77.7 m):
+% Tower-Nacelle Joint (Top, z = 77.7 m):
 %    Geometric ratios: D/d = 3036/3030 = 1.002,  r/d = 5/3030 = 0.00165
 Kt_top = 2; % Kt (nacelle)
 q_top  = 0.67; % q (nacelle)
 
-fatigue_res = analyzeTowerFatigue(z_tower, hub_height, OD_tower, I_tower, M_bend, ...
-    R, omega_d4, n_blades, F_thrust, omega_n, zeta_tower, nHarmonics, ...
-    strength_tens_steel, Kt_bot, q_bot, Kt_top, q_top);
+fatigue_res = analyzeTowerFatigue(z_tower, hub_height, OD_tower, I_tower, ...
+    M_bend, R, omega_d4, n_blades, F_thrust, omega_n, zeta_tower, ...
+    nHarmonics, strength_tens_steel, Kt_bot, q_bot, Kt_top, q_top);
 
 fprintf('\nPart 4: Fatigue Analysis\n');
 fprintf('Modified Endurance Limit Se: %.2f MPa\n', fatigue_res.Se_bot / 1e6);
@@ -556,24 +564,26 @@ fprintf('Top Tower-Nacelle: sig_alt = %.3f MPa | SF = %.2f\n', ...
 
 % S-N plot in log scale
 figure('Name', 'Q5: S-N Plot in Log Scale')
-loglog(fatigue_res.N_curve, fatigue_res.Sf_curve / 1e6, 'k-', 'LineWidth', 2.0)
+loglog(fatigue_res.N_curve, fatigue_res.Sf_curve /1e6,'k-','LineWidth',2.0)
 hold on
 legend_entries = {'S-N Fatigue Curve (ASTM A572 Gr. 50)'};
 
 if isfinite(fatigue_res.sig_alt_bot)
     yline(fatigue_res.sig_alt_bot / 1e6, 'r--', 'LineWidth', 1.5)
-    legend_entries{end+1} = sprintf('Foundation \\sigma_{alt} (%.2f MPa)', fatigue_res.sig_alt_bot / 1e6);
+    legend_entries{end+1} = sprintf('Foundation \\sigma_{alt} (%.2f MPa)', ...
+        fatigue_res.sig_alt_bot / 1e6);
 end
 if isfinite(fatigue_res.sig_alt_top)
     yline(fatigue_res.sig_alt_top / 1e6, 'b-.', 'LineWidth', 1.5)
-    legend_entries{end+1} = sprintf('Nacelle Joint \\sigma_{alt} (%.2f MPa)', fatigue_res.sig_alt_top / 1e6);
+    legend_entries{end+1} = sprintf('Nacelle Joint \\sigma_{alt} (%.2f MPa)', ...
+        fatigue_res.sig_alt_top / 1e6);
 end
 
 xlim([1e3, 1e8])
 ylim([0.01, 1000])
-xlabel('Number of Cycles to Failure, N (cycles)')
-ylabel('Endurance Strength Se (MPa)')
-legend(legend_entries, 'Location', 'southeast')
+xlabel('Number of Cycles to Failure, N (cycles)','FontName','Times New Roman')
+ylabel('Endurance Strength Se (MPa)','FontName','Times New Roman')
+legend(legend_entries, 'Location', 'southeast', 'FontName','Times New Roman')
 grid off
 
 
@@ -592,7 +602,8 @@ function [F, T, P, CP, CT, force_1_blade, torque_1_blade, CD_r, CL_r] = ...
 % coefficient (CT) from blade element momentum induction and airfoil loads.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if nargin < 15 || isempty(alpha_prime_r)
-        [alpha_prime_r, ~, ~] = calculateInductionFactors(radius, U, omega, alpha);
+        [alpha_prime_r, ~, ~] = calculateInductionFactors(radius, U, omega, ...
+            alpha);
     end
 
     [~, ~, Fz_prime, Ftheta_prime, ~, ~, CD_r, CL_r] = calculateDragLift( ...
@@ -787,6 +798,8 @@ function P = calculateTurbinePower(V, omega, pitch, ...
         chord, twist, alpha, density, viscosity, sections, airfoil_type, ...
         airfoils, n_blades, 1);
 end
+
+
 % Deliverble 5 Functions
 function [z, deflection, w_hub, sigma_axial, sigma_bending, sigma_comp_max, ...
           M_bend, V_shear, P_axial, A, I, OD, m_tower_total] = ...
