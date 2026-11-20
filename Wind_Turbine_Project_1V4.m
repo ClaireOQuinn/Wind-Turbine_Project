@@ -125,7 +125,7 @@ for i=1:length(pitch_values)
         (wind_vel_d2^3)*area_swept);
 end
 
-% Determining pitch angle resulting in maximum coeffecient of power
+% Determining pitch angle resulting in maximum coefficient of power
 [max_CP, optimized_index] = max(CP_values);
 optimal_pitch = pitch_values(optimized_index);
 CT_d2 = CT_values(optimized_index);
@@ -220,7 +220,7 @@ options_d3 = optimoptions('fmincon', 'Display', 'off', 'Algorithm', ...
     'sqp','OutputFcn', @outfun_d3, 'DiffMinChange', 1e-3);
 
 % Minimizing -CP to maximize CP as we are using 'fmincon' (a minimization
-% optimization function). Nagtive CP flips the CP values, so the min is now
+% optimization function). Negative CP flips the CP values, so the min is now
 % the max
 [x_opt_d3, neg_CP_d3, exitflag_d3, output_d3] = fmincon(...
     @(x) obj_neg_CP(x, wind_vel_d3, R, radius, alpha, twist, chord, ...
@@ -245,10 +245,10 @@ optimal_lambda_d3 = x_opt_d3(2);
 optimal_pitch_d3_2  = x_opt_d3_2(1);
 optimal_lambda_d3_2 = x_opt_d3_2(2);
 
-% Maximium coefficient of power
+% Maximum coefficient of power
 max_CP_d3 = -neg_CP_d3;
 
-% Maximium coefficient of power, realistic upper bounds
+% Maximum coefficient of power, realistic upper bounds
 max_CP_d3_2 = -neg_CP_d3_2;
 
 % Calculating resulting Coefficient of Thrust
@@ -308,7 +308,7 @@ yline(lambda_limits(1), 'm--', 'LineWidth', 1.5); % minimum rotor speed
 yline(lambda_limits(2), 'm-', 'LineWidth', 1.5); % maximum rotor speed
 
 % Plot optimization path, initial guess, and optimal CP
-% optimziation path
+% optimization path
 plot(x_steps_d3_1(:,1), x_steps_d3_1(:,2), 'r-', 'MarkerFaceColor', 'r', ...
     'MarkerSize', 5, 'LineWidth', 2);
 % initial gues
@@ -343,13 +343,13 @@ yline(lambda_limits(1), 'm--', 'LineWidth', 1.5); % minimum rotor speed
 yline(upperbounds2_d3(2), 'm-','LineWidth',1.5);% realistic max rotor speed
 
 % Plot optimization path, initial guess, and optimal CP
-% original optimziation path
+% original optimization path
 plot(x_steps_d3_1(:,1), x_steps_d3_1(:,2), 'r--', 'MarkerFaceColor', 'r', ...
     'MarkerSize', 5, 'LineWidth', 2);
-% realistic optimziation path
+% realistic optimization path
 plot(x_steps_d3(:,1), x_steps_d3(:,2), 'r-', 'MarkerFaceColor', 'r', ...
     'MarkerSize', 5, 'LineWidth', 2);
-% initial gues
+% initial guess
 plot(x0_d3(1), x0_d3(2), 'bo', 'MarkerFaceColor', 'b');
 % optimal CP
 plot(optimal_pitch_d3_2, optimal_lambda_d3_2, 'o', 'MarkerFaceColor', 'y', ...
